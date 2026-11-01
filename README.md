@@ -169,17 +169,17 @@ Funcionalidade da [SPEC-004](docs/specs/SPEC-004-conectar-whatsapp-da-loja.md), 
 ```bash
 uv run python -m emporio whatsapp conectar --simulado   # demonstração: sem app da Meta e sem SMS de verdade
 uv run python -m emporio whatsapp conectar              # real: META_APP_ID e META_APP_SECRET no .env
-uv run python -m emporio whatsapp status                # etapa atual e próxima ação
+uv run python -m emporio whatsapp status [--simulado]   # etapa atual (real e simulado ficam em arquivos separados)
 ```
 
 O comando conduz cinco etapas:
-1. **Login com a conta do Facebook** (OAuth com `state` contra CSRF, retorno em `http://localhost:8765/callback`), troca por token de longa duração e validação com `debug_token`: mesmo app, permissões do WhatsApp e contas do WhatsApp Business autorizadas.
+1. **Login com a conta do Facebook** (OAuth com `state` contra CSRF, retorno só em loopback, `http://localhost:8765/callback`), troca por token de longa duração e validação com `debug_token`: mesmo app, permissões do WhatsApp e contas do WhatsApp Business autorizadas. Se a Meta não informar a conta, use `META_WABA_ID`.
 2. **Número:** escolher um da conta ou cadastrar um novo, normalizado para +55.
-3. **Código por SMS** (ou ligação) no celular da loja. Até 5 tentativas por código, e outro código só depois de 60 s.
+3. **Código por SMS** (ou ligação) no celular da loja. Até 5 tentativas por código, e outro código só depois de 60 s (política local, não limite da Meta).
 4. **Registro** com o PIN de duas etapas, que não é salvo.
-5. **Assinatura dos webhooks.**
+5. **Assinatura do app na conta** (`subscribed_apps`). A etapa final se chama `app_assinado`: os eventos passam a ir para o webhook configurado no app, que ainda não existe neste protótipo.
 
-Interrompido, o comando retoma da etapa salva. O token é guardado **cifrado com Fernet** (`WHATSAPP_CHAVE_CIFRA`, gerada por `whatsapp gerar-chave`). Sem a chave, o token não é salvo e o resto funciona. Receber e responder mensagens pelo webhook exige um servidor HTTPS público e é o próximo passo. As chamadas reais estão testadas sem rede (endpoints e parâmetros da v25.0), mas **ainda não foram exercitadas com um app da Meta de verdade**.
+Interrompido, o comando retoma da etapa salva; token expirado pede novo login sem perder a etapa, e erro numa etapa automática para o comando em vez de repetir a chamada. O token é guardado **cifrado com Fernet** (`WHATSAPP_CHAVE_CIFRA`, gerada por `whatsapp gerar-chave`). Sem a chave, o token não é salvo e o resto funciona. O OAuth do CLI serve para a loja conectar a própria conta; atender vários clientes pelo mesmo app pede Embedded Signup e token de usuário do sistema (fora do escopo). Receber e responder mensagens pelo webhook exige um servidor HTTPS público e é o próximo passo. As chamadas reais estão testadas sem rede (endpoints e parâmetros da v25.0), mas **ainda não foram exercitadas com um app da Meta de verdade**.
 
 A especificação completa (escopo, 26 regras numeradas, casos de borda e 19 critérios de aceite) está em [docs/specs/SPEC-001-agente-atendimento.md](docs/specs/SPEC-001-agente-atendimento.md); as decisões, em formato curto, em [docs/decisoes.md](docs/decisoes.md).
 

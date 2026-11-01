@@ -1,15 +1,21 @@
-"""Regras puras da conexão do WhatsApp (SPEC-004 RW-01 a RW-05)."""
+"""Regras puras da conexão do WhatsApp (SPEC-004 RW-01 a RW-05, RW-09).
+
+Os limites de 5 tentativas por código e 60 s para pedir outro são política LOCAL (proteção contra uso
+excessivo), não limites oficiais da Meta, que tem os próprios.
+"""
 
 from __future__ import annotations
 
 import re
 import secrets
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 ESCOPOS = ("whatsapp_business_management", "whatsapp_business_messaging", "business_management")
 ESCOPOS_OBRIGATORIOS = ("whatsapp_business_management", "whatsapp_business_messaging")
 TENTATIVAS_POR_CODIGO = 5
 INTERVALO_NOVO_CODIGO = timedelta(seconds=60)
+HOSTS_LOCAIS = {"localhost", "127.0.0.1"}
 
 
 def novo_state() -> str:
@@ -19,6 +25,14 @@ def novo_state() -> str:
 
 def state_confere(esperado: str, recebido: str | None) -> bool:
     return bool(recebido) and secrets.compare_digest(esperado, recebido)
+
+
+def validar_redirect(uri: str) -> tuple[str, int, str]:
+    """RW-09: o retorno do OAuth só pode ser http://localhost:PORTA/caminho (servidor local em loopback)."""
+    u = urlparse(uri or "")
+    if u.scheme != "http" or (u.hostname or "") not in HOSTS_LOCAIS or not u.port or not u.path.startswith("/"):
+        raise ValueError("META_REDIRECT_URI deve ser http://localhost:PORTA/caminho (ex.: http://localhost:8765/callback)")
+    return u.hostname, u.port, u.path
 
 
 def normalizar_numero_br(texto: str) -> tuple[str, str]:

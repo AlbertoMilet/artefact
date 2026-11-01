@@ -2,6 +2,7 @@
 
 Cada método confere a etapa atual, chama o provedor (real ou simulado), avança e salva. Erro da Meta não
 avança a etapa (RW-07). O token fica em memória durante o comando e, se houver chave, cifrado no arquivo.
+Token expirado ou revogado leva a novo login sem perder a etapa (revisão do Codex).
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Callable
 
+from emporio.rules.horario import FUSO
 from emporio.whatsapp import conexao as arq
 from emporio.whatsapp import regras
 from emporio.whatsapp.conexao import Conexao, Etapa, SemChaveDeCifra
@@ -19,11 +21,23 @@ class EtapaInvalida(RuntimeError):
     pass
 
 
+class PrecisaLogin(EtapaInvalida):
+    """Sem token utilizável nesta sessão (ausente, expirado ou revogado)."""
+
+
+def _agora_fuso() -> datetime:
+    return datetime.now(FUSO)
+
+
 class Onboarding:
     def __init__(self, provedor: ProvedorMeta, conexao: Conexao | None = None,
-                 agora: Callable[[], datetime] = datetime.now, salvar: bool = True):
+                 agora: Callable[[], datetime] = _agora_fuso, salvar: bool = True, simulado: bool | None = None):
         self.p = provedor
-        self.c = conexao or arq.carregar()
+        self.simulado = simulado if simulado is not None else provedor.app_id == "app-simulado"
+        self.c = conexao or arq.carregar(self.simulado)
+        self.c.ambiente = "simulado" if self.simulado else "real"
+        if self.c.app_id and str(self.c.app_id) != str(provedor.app_id):
+            raise EtapaInvalida(f"a conexão salva é de outro app da Meta ({self.c.app_id}); rode `whatsapp desconectar`")
         self.agora = agora
         self.salvar_em_disco = salvar
         self.token: Token | None = None
@@ -38,7 +52,15 @@ class Onboarding:
         if not self.c.chegou(minima) or (maxima is not None and self.c.chegou(maxima) and self.c.etapa != maxima):
             raise EtapaInvalida(f"etapa atual: {self.c.etapa.value}; próxima ação: {self.proxima_acao()}")
 
+    def token_expirado(self) -> bool:
+        if not self.c.token_expira_em:
+            return False
+        return self.agora() >= datetime.fromisoformat(self.c.token_expira_em)
+
     def _token(self) -> Token:
+        if self.token_expirado():
+            self.token = None
+            raise PrecisaLogin("o token da Meta expirou: faça o login com Facebook de novo")
         if self.token:
             return self.token
         if self.c.token_cifrado:
@@ -48,7 +70,17 @@ class Onboarding:
                 pass
             except Exception:
                 self.avisos.append("o token salvo não pôde ser decifrado (chave trocada?)")
-        raise EtapaInvalida("sem token da Meta nesta sessão: faça o login com Facebook de novo")
+        raise PrecisaLogin("sem token da Meta nesta sessão: faça o login com Facebook de novo")
+
+    def _chamar(self, funcao, *args):
+        """Erro de autenticação da Meta (token revogado) vira pedido de novo login, sem perder a etapa."""
+        try:
+            return funcao(*args)
+        except ErroMeta as e:
+            if e.autenticacao:
+                self.token = None
+                raise PrecisaLogin(f"a Meta recusou o token ({e}): faça o login com Facebook de novo") from None
+            raise
 
     def proxima_acao(self) -> str:
         return {
@@ -57,30 +89,39 @@ class Onboarding:
             Etapa.NUMERO_ESCOLHIDO: "enviar o código por SMS",
             Etapa.CODIGO_ENVIADO: "digitar o código recebido por SMS",
             Etapa.VERIFICADO: "registrar o número com o PIN de 6 dígitos",
-            Etapa.REGISTRADO: "assinar os webhooks",
-            Etapa.CONECTADO: "nada: o WhatsApp da loja está conectado",
+            Etapa.REGISTRADO: "assinar o app na conta do WhatsApp Business",
+            Etapa.ASSINADO: "nada nesta etapa: número registrado e app assinado. Para receber mensagens falta o "
+                            "webhook HTTPS (fora do escopo do protótipo)",
         }[self.c.etapa]
 
     # ---------------------------------------------------------------- 1. login com Facebook
-    def autenticar(self, code: str, state_recebido: str | None, state_esperado: str, waba_id: str | None = None) -> list[str]:
+    def autenticar(self, code: str, state_recebido: str | None, state_esperado: str,
+                   escolher_waba: Callable[[list[str]], str] | None = None, waba_reserva: str | None = None) -> list[str]:
         if not regras.state_confere(state_esperado, state_recebido):          # RW-01
             raise EtapaInvalida("retorno do login recusado: state diferente do enviado (possível CSRF)")
         token = self.p.longa_duracao(self.p.trocar_codigo(code))
         info = self.p.validar(token)
-        app_id = getattr(self.p, "app_id", None)
-        if not info["valido"] or (app_id and info["app_id"] != str(app_id)):  # RW-02
+        if not info["valido"] or info["app_id"] != str(self.p.app_id):         # RW-02
             raise EtapaInvalida("token inválido ou de outro app da Meta")
         faltando = regras.escopos_faltando(info["escopos"])
         if faltando:
             raise EtapaInvalida(f"faltam permissões no login: {', '.join(faltando)}")
-        if not info["wabas"]:
-            raise EtapaInvalida("nenhuma conta do WhatsApp Business foi autorizada no login")
+        wabas = list(info["wabas"]) or ([waba_reserva] if waba_reserva else [])
+        if not wabas:
+            raise EtapaInvalida("nenhuma conta do WhatsApp Business veio no login; informe META_WABA_ID no .env")
         self.token = token
-        retomando = self.c.chegou(Etapa.AUTENTICADO) and self.c.waba_id in info["wabas"]
+        retomando = self.c.chegou(Etapa.AUTENTICADO) and self.c.waba_id in wabas
         if not retomando:
-            self.c.waba_id = waba_id if waba_id in info["wabas"] else info["wabas"][0]
-        if token.expira_em_s:
-            self.c.token_expira_em = (self.agora() + timedelta(seconds=token.expira_em_s)).isoformat()
+            if len(wabas) > 1 and escolher_waba is not None:
+                escolhida = escolher_waba(wabas)
+                if escolhida not in wabas:
+                    raise EtapaInvalida("conta do WhatsApp Business escolhida não está entre as autorizadas")
+            else:
+                escolhida = wabas[0]
+            self.c.waba_id = escolhida
+        self.c.app_id = str(self.p.app_id)
+        self.c.token_expira_em = ((self.agora() + timedelta(seconds=token.expira_em_s)).isoformat()
+                                  if token.expira_em_s else None)
         try:
             self.c.token_cifrado = arq.cifrar(token.valor)                    # RW-06
         except SemChaveDeCifra as e:
@@ -91,23 +132,23 @@ class Onboarding:
         else:
             self.c.avancar(Etapa.AUTENTICADO, self.agora(), f"WABA {self.c.waba_id}")
         self._salvar()
-        return info["wabas"]
+        return wabas
 
     def precisa_login(self) -> bool:
         if self.c.etapa == Etapa.NAO_CONECTADO:
             return True
-        if self.c.etapa == Etapa.CONECTADO:
+        if self.c.etapa == Etapa.ASSINADO:
             return False
         try:
             self._token()
             return False
-        except EtapaInvalida:
+        except PrecisaLogin:
             return True
 
     # ---------------------------------------------------------------- 2. número
     def numeros(self) -> list[Numero]:
         self._exigir(Etapa.AUTENTICADO)
-        return self.p.listar_numeros(self._token(), self.c.waba_id)
+        return self._chamar(self.p.listar_numeros, self._token(), self.c.waba_id)
 
     def escolher_numero(self, numero: Numero) -> None:
         self._exigir(Etapa.AUTENTICADO)
@@ -126,7 +167,12 @@ class Onboarding:
         cc, numero = regras.normalizar_numero_br(texto)                      # RW-03
         if not nome_exibicao.strip():
             raise ValueError("informe o nome de exibição do negócio (ex.: Empório da Música)")
-        novo_id = self.p.cadastrar_numero(self._token(), self.c.waba_id, cc, numero, nome_exibicao.strip())
+        # reconciliação: o número já existe na conta (cadastro anterior interrompido)? então só escolhe
+        for n in self.numeros():
+            if numero in "".join(ch for ch in n.exibicao if ch.isdigit()):
+                self.escolher_numero(n)
+                return n
+        novo_id = self._chamar(self.p.cadastrar_numero, self._token(), self.c.waba_id, cc, numero, nome_exibicao.strip())
         n = Numero(novo_id, f"+{cc} {numero}", nome_exibicao.strip(), "NOT_VERIFIED", "PENDING")
         self.escolher_numero(n)
         return n
@@ -136,10 +182,10 @@ class Onboarding:
         if self.c.etapa not in (Etapa.NUMERO_ESCOLHIDO, Etapa.CODIGO_ENVIADO):
             raise EtapaInvalida(f"etapa atual: {self.c.etapa.value}; próxima ação: {self.proxima_acao()}")
         ultimo = datetime.fromisoformat(self.c.codigo_pedido_em) if self.c.codigo_pedido_em else None
-        pode, espera = regras.pode_pedir_codigo(ultimo, self.agora())          # RW-04
+        pode, espera = regras.pode_pedir_codigo(ultimo, self.agora())          # RW-04 (política local)
         if not pode:
             raise EtapaInvalida(f"aguarde {espera} s para pedir outro código")
-        self.p.pedir_codigo(self._token(), self.c.phone_number_id, metodo.upper(), "pt_BR")
+        self._chamar(self.p.pedir_codigo, self._token(), self.c.phone_number_id, metodo.upper(), "pt_BR")
         self.c.codigo_pedido_em, self.c.tentativas_codigo = self.agora().isoformat(), 0
         self.c.avancar(Etapa.CODIGO_ENVIADO, self.agora(), f"código por {metodo.upper()}")
         self._salvar()
@@ -150,23 +196,24 @@ class Onboarding:
         if self.c.tentativas_codigo >= regras.TENTATIVAS_POR_CODIGO:
             raise EtapaInvalida("tentativas esgotadas para este código: peça outro")
         try:
-            self.p.confirmar_codigo(self._token(), self.c.phone_number_id, codigo)
-        except ErroMeta:
-            self.c.tentativas_codigo += 1
-            self._salvar()
+            self._chamar(self.p.confirmar_codigo, self._token(), self.c.phone_number_id, codigo)
+        except ErroMeta as e:
+            if not e.rede:          # conta só a rejeição do código pela Meta, não falha de rede
+                self.c.tentativas_codigo += 1
+                self._salvar()
             raise
         self.c.avancar(Etapa.VERIFICADO, self.agora(), "código confirmado")
         self._salvar()
 
-    # ---------------------------------------------------------------- 4. registro e webhooks
+    # ---------------------------------------------------------------- 4. registro e assinatura
     def registrar(self, pin: str) -> None:
         self._exigir(Etapa.VERIFICADO, Etapa.VERIFICADO)
-        self.p.registrar(self._token(), self.c.phone_number_id, regras.validar_pin(pin))    # RW-05: não salva
+        self._chamar(self.p.registrar, self._token(), self.c.phone_number_id, regras.validar_pin(pin))   # RW-05
         self.c.avancar(Etapa.REGISTRADO, self.agora(), "número ativo na Cloud API")
         self._salvar()
 
     def assinar_webhooks(self) -> None:
         self._exigir(Etapa.REGISTRADO, Etapa.REGISTRADO)
-        self.p.assinar_webhooks(self._token(), self.c.waba_id)
-        self.c.avancar(Etapa.CONECTADO, self.agora(), "webhooks assinados")
+        self._chamar(self.p.assinar_webhooks, self._token(), self.c.waba_id)
+        self.c.avancar(Etapa.ASSINADO, self.agora(), "app assinado na WABA")
         self._salvar()

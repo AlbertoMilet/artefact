@@ -1,6 +1,6 @@
 # SPEC-004: Conectar o WhatsApp da loja (login com Facebook e código por SMS)
 
-- **Status:** concluída (rev. 2): testada com o provedor simulado e com as chamadas reais conferidas sem rede; falta o teste com um app da Meta de verdade
+- **Status:** concluída (rev. 3, revisão do Codex): testada com o provedor simulado e com as chamadas reais conferidas sem rede; falta o teste com um app da Meta de verdade
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Origem:** pedido do usuário em 01/11/2026, baseado no projeto BaixaAI: o marco "um app da Meta, vários números" (`spec/MARCO-um-app-varios-numeros.md`) prevê que cada cliente entre pelo mesmo app da Meta, com o próprio portfólio via **Embedded Signup**, e deixa esse fluxo para uma spec futura. O BaixaAI não tem esse código; o cliente da Graph API dele (`app/providers/whatsapp/meta/client.py`, v25.0) serve de referência de versão e de chamadas.
@@ -28,7 +28,7 @@ Um comando guiado, `python -m emporio whatsapp conectar`, que faz o login com a 
 ### Faz parte
 
 - [x] Login com Facebook (OAuth 2.0 com `state` contra CSRF) por um servidor local de retorno (`http://localhost:8765/callback`), troca do código por token e por token de longa duração
-- [x] Validação do token (`debug_token`): app certo, token válido, permissões exigidas; contas do WhatsApp Business (WABA) autorizadas vêm das `granular_scopes`
+- [x] Validação do token (`debug_token`): app certo, token válido, permissões exigidas; contas do WhatsApp Business (WABA) autorizadas vêm das `granular_scopes` quando a Meta as informa; senão, de `META_WABA_ID`. Com mais de uma WABA, o dono escolhe
 - [x] Listar os números da WABA ou cadastrar um número novo
 - [x] Código de confirmação por SMS (ou ligação), confirmação do código, registro com PIN de 6 dígitos e assinatura dos webhooks do app na WABA
 - [x] Estado da conexão salvo e retomável (`whatsapp status`, `whatsapp conectar` continua da última etapa)
@@ -40,7 +40,7 @@ Um comando guiado, `python -m emporio whatsapp conectar`, que faz o login com a 
 | Item | Por quê |
 |---|---|
 | Receber e responder mensagens pelo webhook | Exige servidor HTTPS público; é o passo seguinte (README, "com mais tempo") |
-| Embedded Signup com o SDK JavaScript da Meta (popup, `config_id`) | Exige página web em domínio aprovado; no CLI o mesmo resultado sai do OAuth padrão com as permissões do WhatsApp |
+| Embedded Signup com o SDK JavaScript da Meta (popup, `config_id`) | Exige página web em domínio aprovado. O OAuth padrão do CLI **não** equivale a ele: serve para a loja conectar a própria WABA; para vários clientes (Tech Provider) a Meta recomenda Embedded Signup e token de usuário do sistema |
 | Verificação do negócio, revisão do app e Tech Provider na Meta | Feitas no painel da Meta, fora do código |
 | Guardar o PIN de duas etapas | O PIN é do dono da loja; o sistema só o envia no registro |
 
@@ -56,9 +56,9 @@ Um comando guiado, `python -m emporio whatsapp conectar`, que faz o login com a 
 | `codigo_enviado` | Código enviado ao celular da loja | digitar o código |
 | `verificado` | Número confirmado na Meta | registrar com PIN |
 | `registrado` | Número ativo na Cloud API | assinar webhooks |
-| `conectado` | Webhooks assinados: pronto para receber mensagens | nada |
+| `app_assinado` | App assinado na WABA (`subscribed_apps`) | configurar o webhook HTTPS (fora do escopo) |
 
-Número já verificado na Meta pula o SMS (vai a `verificado`); número já ativo (`CONNECTED`) vai a `registrado`.
+Número já verificado na Meta pula o SMS (vai a `verificado`); número já ativo (`CONNECTED`) vai a `registrado`. Cadastrar um número que já existe na WABA reaproveita o existente. `app_assinado` **não** quer dizer "recebendo mensagens": `subscribed_apps` só direciona os eventos ao webhook configurado no app. Arquivos antigos com a etapa `conectado` são lidos como `app_assinado`.
 
 ### 4.2 Regras
 
@@ -67,11 +67,12 @@ Número já verificado na Meta pula o SMS (vai a `verificado`); número já ativ
 | RW-01 | O `state` do OAuth é aleatório e conferido no retorno; diferente, o login é recusado | OAuth 2.0 (CSRF) |
 | RW-02 | O token só é aceito se `debug_token` disser válido, do mesmo app (`META_APP_ID`) e com `whatsapp_business_management` e `whatsapp_business_messaging` | Meta |
 | RW-03 | O número é normalizado para o Brasil (código do país 55 + DDD + número) antes de ser cadastrado | BaixaAI (`_format_phone`) |
-| RW-04 | Código de confirmação tem 6 dígitos; até 5 tentativas erradas por código; pedir outro código só depois de 60 s | Limites da Meta (proteção local) |
+| RW-04 | Código de confirmação tem 6 dígitos; até 5 tentativas erradas por código (falha de rede não conta); pedir outro código só depois de 60 s | Política local de proteção, não limite oficial da Meta |
 | RW-05 | PIN de registro: exatamente 6 dígitos; nunca salvo nem mostrado | Meta |
-| RW-06 | Token nunca aparece em tela nem em log; salvo só cifrado (Fernet). Sem `WHATSAPP_CHAVE_CIFRA`, os IDs são salvos e o token não, com aviso | Trato Fácil (`crypto.py`), sem derrubar o app quando falta a chave |
-| RW-07 | Erro da Meta vira mensagem clara com o código do erro; a etapa não avança | — |
-| RW-08 | Arquivo da conexão (`.emporio_whatsapp.json`) fora do git | RN-24 da SPEC-001 |
+| RW-06 | Token e segredo do app nunca aparecem em tela, log, `repr` ou mensagem de erro; token salvo só cifrado (Fernet). Sem `WHATSAPP_CHAVE_CIFRA`, os IDs são salvos e o token não, com aviso | Trato Fácil (`crypto.py`), sem derrubar o app quando falta a chave |
+| RW-07 | Erro da Meta vira mensagem clara com o código do erro; a etapa não avança. Etapa automática (enviar código, assinar) com erro para o comando em vez de repetir a chamada. Token expirado ou recusado (códigos 102/190) pede novo login sem perder a etapa | — |
+| RW-08 | Arquivo da conexão (`.emporio_whatsapp.json`) fora do git, gravado de forma atômica; o modo simulado usa arquivo próprio (`.emporio_whatsapp_simulado.json`); conexão salva de outro `META_APP_ID` é recusada; arquivo corrompido gera erro claro | RN-24 da SPEC-001 |
+| RW-09 | O retorno do OAuth só aceita `http://localhost:PORTA/caminho` ou `127.0.0.1`; o servidor local escuta só em loopback, ignora caminhos e `state` errados e escapa o HTML | OAuth 2.0 (app nativo, loopback) |
 
 ## 5. Critérios de aceite
 
@@ -79,6 +80,8 @@ Número já verificado na Meta pula o SMS (vai a `verificado`); número já ativ
 - [x] **CW-02** Dado um token de outro app ou sem `whatsapp_business_messaging`, então a conexão não avança.
 - [x] **CW-03** Dado "(81) 99999-0000", então o cadastro envia `cc=55` e `phone_number=81999990000`.
 - [x] **CW-04** Dado o código errado 5 vezes, então é preciso pedir outro; pedir outro antes de 60 s é recusado.
-- [x] **CW-05** Dado o fluxo completo no provedor simulado, então a etapa termina em `conectado` e a conexão salva não contém o token em claro.
+- [x] **CW-05** Dado o fluxo completo no provedor simulado, então a etapa termina em `app_assinado` e a conexão salva não contém o token nem o PIN em claro.
 - [x] **CW-06** Dado `conectar` interrompido em `codigo_enviado`, então a próxima execução pede o código, sem refazer o login.
-- [x] **CW-07** As chamadas reais usam os endpoints e parâmetros da Graph API v25.0 (testado sem rede).
+- [x] **CW-07** As chamadas reais usam os endpoints e parâmetros da Graph API v25.0, conferidos chamada a chamada com um transporte falso (sem rede). Não prova o comportamento da Meta de verdade, só o formato das requisições.
+- [x] **CW-08** Dado o token expirado ou recusado pela Meta, então o comando pede novo login e mantém a etapa.
+- [x] **CW-09** Dado erro ao enviar o código, então o comando para depois de uma chamada (sem loop).

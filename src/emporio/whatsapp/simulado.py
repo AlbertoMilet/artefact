@@ -1,6 +1,8 @@
 """Provedor simulado da Meta (SPEC-004): demonstração e testes sem app da Meta e sem SMS de verdade.
 
-O "SMS" é o código guardado em `ultimo_codigo`, que o CLI mostra no modo simulado.
+O "SMS" é o código guardado em `ultimo_codigo`, que o CLI mostra no modo simulado. No CLI o simulado é
+determinístico (código 123456, `estrito=False`) para retomar entre execuções, já que cada comando cria um
+provedor novo (revisão do Codex). O PIN nunca é guardado.
 """
 
 from __future__ import annotations
@@ -14,16 +16,18 @@ from emporio.whatsapp.regras import ESCOPOS
 class ProvedorSimulado:
     APP_ID = "app-simulado"
 
-    def __init__(self, numeros: list[Numero] | None = None, codigo_fixo: str | None = None):
+    def __init__(self, numeros: list[Numero] | None = None, codigo_fixo: str | None = None, estrito: bool = True):
         self.numeros: dict[str, Numero] = {n.id: n for n in (numeros or [
             Numero("1001", "+55 67 3341-4444", "Empório da Música", "NOT_VERIFIED", "PENDING")])}
         self.codigo_fixo = codigo_fixo
+        self.estrito = estrito          # False: aceita confirmar/registrar sem o histórico deste processo
         self.app_id = self.APP_ID
         self.ultimo_codigo: str | None = None
         self.verificados: set[str] = set()
-        self.registrados: dict[str, str] = {}
+        self.registrados: set[str] = set()
         self.webhooks: set[str] = set()
         self.chamadas: list[str] = []
+        self.wabas = ["2001"]
 
     def url_login(self, state: str) -> str:
         return f"https://www.facebook.com/simulado/dialog/oauth?state={state}"
@@ -39,7 +43,7 @@ class ProvedorSimulado:
 
     def validar(self, token: Token) -> dict:
         return {"valido": token.valor.startswith("token-"), "app_id": self.APP_ID, "escopos": list(ESCOPOS),
-                "wabas": ["2001"]}
+                "wabas": list(self.wabas)}
 
     def listar_numeros(self, token: Token, waba_id: str) -> list[Numero]:
         return list(self.numeros.values())
@@ -54,14 +58,15 @@ class ProvedorSimulado:
         self.ultimo_codigo = self.codigo_fixo or f"{secrets.randbelow(10 ** 6):06d}"
 
     def confirmar_codigo(self, token: Token, phone_id: str, codigo: str) -> None:
-        if codigo != self.ultimo_codigo:
+        esperado = self.ultimo_codigo or (None if self.estrito else self.codigo_fixo)
+        if codigo != esperado:
             raise ErroMeta("código de verificação incorreto", 136025)
         self.verificados.add(phone_id)
 
     def registrar(self, token: Token, phone_id: str, pin: str) -> None:
-        if phone_id not in self.verificados:
+        if self.estrito and phone_id not in self.verificados:
             raise ErroMeta("número ainda não verificado", 133010)
-        self.registrados[phone_id] = pin
+        self.registrados.add(phone_id)          # o PIN não é guardado
 
     def assinar_webhooks(self, token: Token, waba_id: str) -> None:
         self.webhooks.add(waba_id)

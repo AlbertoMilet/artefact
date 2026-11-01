@@ -2,6 +2,7 @@
 
 O token da Meta é salvo só cifrado com Fernet (chave em WHATSAPP_CHAVE_CIFRA), como no crypto.py do
 Trato Fácil, mas sem derrubar a aplicação quando a chave falta: aí os IDs são salvos e o token não.
+Real e simulado usam arquivos separados e a conexão guarda o ambiente e o app (revisão do Codex).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ class Etapa(str, Enum):
     CODIGO_ENVIADO = "codigo_enviado"
     VERIFICADO = "verificado"
     REGISTRADO = "registrado"
-    CONECTADO = "conectado"
+    ASSINADO = "app_assinado"        # número registrado e app assinado na WABA; falta o webhook HTTPS
 
 
 ORDEM = list(Etapa)
@@ -30,12 +31,14 @@ ORDEM = list(Etapa)
 @dataclass
 class Conexao:
     etapa: Etapa = Etapa.NAO_CONECTADO
+    ambiente: str = "real"                      # "real" ou "simulado"
+    app_id: str | None = None                   # app da Meta que autorizou (não mistura conexões de apps)
     waba_id: str | None = None
     phone_number_id: str | None = None
     numero_exibicao: str | None = None
     nome_verificado: str | None = None
     token_cifrado: str | None = None
-    token_expira_em: str | None = None           # ISO 8601, quando a Meta informa
+    token_expira_em: str | None = None           # ISO 8601 com fuso, quando a Meta informa
     codigo_pedido_em: str | None = None          # ISO 8601 (intervalo para pedir outro, RW-04)
     tentativas_codigo: int = 0
     atualizado_em: str | None = None
@@ -48,6 +51,11 @@ class Conexao:
         self.etapa = etapa
         self.atualizado_em = agora.isoformat()
         self.historico.append(f"{agora:%d/%m %H:%M} {etapa.value}" + (f": {nota}" if nota else ""))
+        self.historico = self.historico[-50:]
+
+
+class ConexaoCorrompida(RuntimeError):
+    pass
 
 
 # ---------------------------------------------------------------- cifra do token
@@ -79,33 +87,40 @@ def decifrar(token_cifrado: str) -> str:
 
 # ---------------------------------------------------------------- arquivo
 
-def caminho() -> Path:
+def caminho(simulado: bool = False) -> Path:
     padrao = Path(__file__).resolve().parents[3] / ".emporio_whatsapp.json"
-    return Path(os.getenv("WHATSAPP_CONEXAO", str(padrao)))
+    real = Path(os.getenv("WHATSAPP_CONEXAO", str(padrao)))
+    return real.with_name(real.stem + "_simulado" + real.suffix) if simulado else real
 
 
-def carregar() -> Conexao:
-    arq = caminho()
+def carregar(simulado: bool = False) -> Conexao:
+    arq = caminho(simulado)
     if not arq.is_file():
-        return Conexao()
+        return Conexao(ambiente="simulado" if simulado else "real")
     try:
         dados = json.loads(arq.read_text(encoding="utf-8"))
+        if dados.get("etapa") == "conectado":                 # nome antigo da etapa final
+            dados["etapa"] = Etapa.ASSINADO.value
         dados["etapa"] = Etapa(dados.get("etapa", "nao_conectado"))
         return Conexao(**{k: v for k, v in dados.items() if k in Conexao.__dataclass_fields__})
-    except (ValueError, TypeError, json.JSONDecodeError):
-        return Conexao()
+    except (ValueError, TypeError, json.JSONDecodeError) as e:
+        raise ConexaoCorrompida(f"arquivo de conexão ilegível ({arq.name}): confira ou rode `whatsapp desconectar`"
+                                f"{' --simulado' if simulado else ''}") from e
 
 
 def salvar(c: Conexao) -> Path:
-    arq = caminho()
+    """Escrita atômica: grava num temporário e troca (interrupção não deixa o arquivo pela metade)."""
+    arq = caminho(c.ambiente == "simulado")
     dados = asdict(c)
     dados["etapa"] = c.etapa.value
-    arq.write_text(json.dumps(dados, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp = arq.with_name(arq.name + ".tmp")
+    tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, arq)
     return arq
 
 
-def apagar() -> bool:
-    arq = caminho()
+def apagar(simulado: bool = False) -> bool:
+    arq = caminho(simulado)
     if arq.is_file():
         arq.unlink()
         return True
