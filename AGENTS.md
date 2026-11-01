@@ -4,6 +4,7 @@
 - Specs 003 (alerta para o vendedor): a detecção de pedido explícito é determinística (`emporio.alertas.deteccao`); evals e exemplos usam `alertas=False`.
 - SPEC-004 (WhatsApp da loja): token da Meta nunca em tela, log ou arquivo em claro; PIN nunca salvo; testes usam o ProvedorSimulado ou um transporte falso (nada de rede).
 - SPEC-005 (origem do lead): detecção do emoji do canal só em código (`emporio.rules.origem`), na primeira mensagem da janela; o marcador sai do texto antes do modelo.
+- SPEC-007 (atendimento humano): histórico em SQLite sempre mascarado; telefone do cliente só como hash e mascarado; com a conversa assumida, a Lia não responde.
 - SPEC-006 (interface web): só mostra o que o `Agente` devolve; nenhuma regra de negócio em `emporio.web`, texto sempre escapado.
 - A janela de 24 h conta só da última mensagem do cliente (`emporio.retencao.janela`); nada é enviado por iniciativa da loja fora dela, e a retenção fica desligada por padrão.
 - Implemente em incrementos pequenos, cada um com testes passando, e cite a spec no commit: `feat: busca de produtos (spec 001)`.

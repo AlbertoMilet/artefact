@@ -49,3 +49,10 @@ body { padding-bottom: 2rem; background: #f4f7fa; }
 .badge.canal { background: #d4f3ee; color: var(--emp-navy); }
 .alerta-item.novo { animation: realce 2s ease-out; }
 @keyframes realce { from { background: #ffe2ad; } to { background: transparent; } }
+.chat .msg-vendedor { background: #e3ecfb; border: 1px solid #b9cdee; }
+.chat .msg-sistema { background: #eef1f4; color: var(--bs-secondary-color); }
+.chat .autor-vendedor { color: #1f4f9a; }
+.chat .autor-cliente { color: var(--emp-navy); }
+.badge.status-lia { background: #d4f3ee; color: var(--emp-navy); }
+.badge.status-vendedor { background: #e3ecfb; color: #1f4f9a; }
+.list-group-item.aguardando { border-left: 4px solid #f2a93b; }

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Conversa {{ conv.telefone }} · Atendimento{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+  <a href="/atendimento" class="small">&larr; Conversas</a>
+  <h1 class="h4 mb-0">{{ conv.telefone }}</h1>
+  {% if conv.status == "vendedor" %}<span class="badge status-vendedor">com vendedor</span>{% else %}<span class="badge status-lia">com a Lia</span>{% endif %}
+  {% if conv.aguardando_vendedor %}<span class="badge text-bg-warning">pediu vendedor</span>{% endif %}
+  {% if conv.origem %}<span class="badge canal">{{ conv.origem|origem }}</span>{% endif %}
+</div>
+<div class="row g-4">
+  <div class="col-lg-8">
+    {% set url_thread = "/atendimento/" ~ conv.id ~ "/thread" %}
+    {% include "_thread.html" %}
+    {% if conv.status == "vendedor" %}
+    <form method="post" action="/atendimento/{{ conv.id }}/responder" class="d-flex gap-2 mt-2">
+      <input class="form-control" name="texto" maxlength="1000" placeholder="Resposta do vendedor"
+             aria-label="Resposta do vendedor" autofocus autocomplete="off" required>
+      <button class="btn btn-primary">Enviar</button>
+    </form>
+    {% else %}
+    <p class="small text-body-secondary mt-2">A Lia está respondendo. Assuma a conversa para responder como vendedor.</p>
+    {% endif %}
+  </div>
+  <div class="col-lg-4">
+    <h2 class="h6">Atendimento</h2>
+    {% if conv.status == "vendedor" %}
+    <form method="post" action="/atendimento/{{ conv.id }}/devolver" class="mb-3">
+      <button class="btn btn-outline-primary">Devolver à Lia</button>
+    </form>
+    {% else %}
+    <form method="post" action="/atendimento/{{ conv.id }}/assumir" class="mb-3">
+      <button class="btn btn-primary">Assumir conversa</button>
+    </form>
+    {% endif %}
+    <h2 class="h6">Dados da conversa</h2>
+    <ul class="list-unstyled small">
+      <li>Cliente: {{ conv.telefone }}</li>
+      <li>Origem do lead: {{ conv.origem|origem or "desconhecida" }}</li>
+      <li>Pedido verificado: {{ pedido if pedido else "nenhum nesta sessão" }}</li>
+      <li>Solicitações registradas: {{ protocolos|join(", ") if protocolos else "nenhuma" }}</li>
+      <li>Início: {{ conv.criada_em[8:10] }}/{{ conv.criada_em[5:7] }} {{ conv.criada_em[11:16] }}</li>
+    </ul>
+    <p class="small text-body-secondary">Ao devolver, a Lia recebe o que o vendedor escreveu como contexto da conversa.</p>
+  </div>
+</div>
+{% endblock %}

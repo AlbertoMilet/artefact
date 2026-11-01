@@ -34,6 +34,12 @@ def alertas_isolados(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def atendimento_isolado(monkeypatch, tmp_path):
+    """Testes não leem nem gravam o histórico real do painel de atendimento."""
+    monkeypatch.setenv("EMPORIO_DB", str(tmp_path / "atendimento.db"))
+
+
+@pytest.fixture(autouse=True)
 def whatsapp_isolado(monkeypatch, tmp_path):
     """Testes não leem nem gravam a conexão real do WhatsApp nem usam a chave real."""
     monkeypatch.setenv("WHATSAPP_CONEXAO", str(tmp_path / "whatsapp.json"))

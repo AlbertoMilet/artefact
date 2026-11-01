@@ -1,37 +1,51 @@
 {% extends "base.html" %}
-{% set ativo = "atendimento" %}
 {% block title %}Atendimento · Empório da Música{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
-  <h1 class="h4 mb-0">Atendimento com a Lia</h1>
-  {% if demo %}<span class="badge text-bg-warning">modo demonstração, sem modelo de linguagem</span>{% endif %}
+  <h1 class="h4 mb-0">Atendimento</h1>
+  <button id="ativar-som" type="button" class="btn btn-sm btn-outline-primary">Ativar som dos alertas</button>
 </div>
-<p class="small text-body-secondary">Você é o cliente. A Lia consulta catálogo, preços, pedidos e o manual da loja pelas mesmas tools dos evals; cada resposta mostra as ferramentas usadas.</p>
-{% include "_painel.html" %}
+<p class="small text-body-secondary">Todas as conversas, as que pediram vendedor primeiro. Abra uma para ler o histórico, assumir o atendimento (a Lia pausa) e responder. Telefones e e-mails aparecem mascarados.</p>
+<div class="row g-4">
+  <div class="col-lg-8">{% include "_lista.html" %}</div>
+  <div class="col-lg-4">
+    <h2 class="h6">Alertas recentes</h2>
+    {% include "_alertas.html" %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
 <script>
-  // Mostra a mensagem do cliente na hora e mantém a rolagem no fim, como no WhatsApp.
+  // Som sintetizado no navegador para alerta novo (mesmos padrões do vigia do terminal, SPEC-003).
   (() => {
-    const fim = () => { const c = document.getElementById("conversa"); if (c) c.scrollTop = c.scrollHeight; };
-    document.body.addEventListener("htmx:beforeRequest", (e) => {
-      const campo = e.detail.elt.querySelector ? e.detail.elt.querySelector("[name=texto]") : null;
-      const texto = campo ? campo.value.trim() : "";
-      const conversa = document.getElementById("conversa");
-      if (!texto || !conversa) return;
-      const linha = document.createElement("div");
-      linha.className = "d-flex justify-content-end mb-2";
-      const balao = document.createElement("div");
-      balao.className = "msg msg-cliente rounded px-2 py-1";
-      balao.textContent = texto;
-      linha.appendChild(balao);
-      conversa.querySelector(".vazio")?.remove();
-      conversa.appendChild(linha);
-      fim();
+    let audio = null, vistos = null;
+    const tocar = (vendedor) => {
+      if (!audio) return;
+      const notas = vendedor ? [523.3, 659.3, 784.0, 523.3, 659.3, 784.0] : [880, 1174.7];
+      notas.forEach((f, i) => {
+        const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.16;
+        o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+        g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.16);
+      });
+    };
+    document.getElementById("ativar-som").addEventListener("click", (e) => {
+      audio = audio || new AudioContext();
+      e.target.textContent = "Som ativado";
+      e.target.disabled = true;
     });
-    document.body.addEventListener("htmx:afterSettle", () => {
-      fim();
-      document.querySelector("#painel [name=texto][type=text]")?.focus();
-    });
-    fim();
+    const conferir = () => {
+      const itens = [...document.querySelectorAll("#alertas [data-id]")];
+      if (vistos !== null) {
+        const novos = itens.filter((i) => !vistos.has(i.dataset.id));
+        novos.forEach((i) => i.classList.add("novo"));
+        const sonoros = novos.filter((i) => i.dataset.tocar === "1");
+        if (sonoros.length) tocar(sonoros.some((i) => i.dataset.tipo === "pedido_vendedor"));
+      }
+      vistos = new Set(itens.map((i) => i.dataset.id));
+    };
+    document.body.addEventListener("htmx:afterSettle", conferir);
+    conferir();
   })();
 </script>
 {% endblock %}

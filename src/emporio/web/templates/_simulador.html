@@ -1,0 +1,56 @@
+{# Conversa do simulador e painel lateral; trocado inteiro a cada mensagem enviada. #}
+<div id="painel" class="row g-4">
+  <div class="col-lg-8">
+    {% include "_thread.html" %}
+    {% if conv and conv.status == "vendedor" %}
+    <div class="small mt-1 text-body-secondary">Um vendedor está atendendo: a Lia está pausada nesta conversa.</div>
+    {% endif %}
+    <form hx-post="/simulador/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-disabled-elt="find button, find input"
+          hx-indicator="#digitando" method="post" action="/simulador/mensagem" class="d-flex gap-2 mt-2">
+      <input class="form-control" type="text" name="texto" maxlength="1000" placeholder="Mensagem"
+             aria-label="Mensagem" autofocus autocomplete="off" required>
+      <button class="btn btn-success">Enviar</button>
+    </form>
+    <div id="digitando" class="digitando small text-body-secondary mt-1">
+      <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Lia está digitando…
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <h2 class="h6">Roteiro de ensaio</h2>
+    <div class="d-flex flex-column gap-1 mb-3">
+      {% for p in perguntas %}
+      <form hx-post="/simulador/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-indicator="#digitando"
+            method="post" action="/simulador/mensagem">
+        <input type="hidden" name="texto" value="{{ p }}">
+        <button class="btn btn-sm btn-outline-primary w-100 text-start">{{ p }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <p class="small text-body-secondary">Depois de pedir um vendedor, abra o <a href="/atendimento">Atendimento</a>, assuma a conversa e responda.</p>
+
+    {% if inicio %}
+    <h2 class="h6">Chegar por um canal</h2>
+    <p class="small text-body-secondary mb-1">Simula o clique no link do WhatsApp de cada canal (a mensagem já vem com o emoji).</p>
+    <div class="d-flex flex-wrap gap-1 mb-3">
+      {% for o in origens %}
+      <form hx-post="/simulador/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-indicator="#digitando"
+            method="post" action="/simulador/mensagem">
+        <input type="hidden" name="texto" value="{{ mensagem_canal }} {{ o.marcador }}">
+        <button class="btn btn-sm btn-outline-secondary">{{ o.marcador }} {{ o.nome }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2 class="h6">Esta conversa</h2>
+    <ul class="list-unstyled small mb-2">
+      <li>Origem do lead: {% if conv and conv.origem %}<span class="badge canal">{{ conv.origem|origem }}</span>{% else %}<span class="text-body-secondary">desconhecida</span>{% endif %}</li>
+      <li>Atendida por: {% if conv and conv.status == "vendedor" %}vendedor{% else %}Lia{% endif %}</li>
+      <li>Pedido verificado: {{ pedido if pedido else "nenhum" }}</li>
+      <li>Modelo: <code>{{ modelo }}</code></li>
+      {% if data_referencia %}<li>Data de referência: {{ data_referencia.strftime("%d/%m/%Y %H:%M") }}</li>{% endif %}
+    </ul>
+    <form method="post" action="/simulador/apagar"><button class="btn btn-sm btn-outline-secondary">Apagar esta conversa</button></form>
+  </div>
+</div>

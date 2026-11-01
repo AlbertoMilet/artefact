@@ -1,5 +1,6 @@
-"""Interface web do atendimento (SPEC-006): sem rede, com o modo demonstração ou um LLM roteirizado."""
+"""Interface web (SPEC-006 e SPEC-007): simulador de WhatsApp e painel de atendimento, sem rede."""
 
+import sqlite3
 from dataclasses import replace
 
 import pytest
@@ -14,70 +15,109 @@ from emporio.policies import carregar_manual
 from emporio.tools import Toolbox
 from emporio.web import criar_app
 from emporio.web.app import formatar
+from emporio.web.repositorio import Repositorio, chave_do_telefone
 from tests.unit.test_alertas import TocadorFalso
+
+HX = {"HX-Request": "true"}
 
 
 @pytest.fixture
-def cliente_demo(tmp_path):
+def demo(tmp_path):
     config = replace(Config(), llm_provider="fake", tickets_path=tmp_path / "t.jsonl")
-    return TestClient(criar_app(montar_agente(config), config))
+    repo = Repositorio(tmp_path / "atendimento.db")
+    return TestClient(criar_app(montar_agente(config), config, repo)), repo
 
 
-def test_pagina_inicial_com_roteiro_e_canais(cliente_demo):
-    r = cliente_demo.get("/")
-    assert r.status_code == 200 and "Atendimento com a Lia" in r.text
-    assert "Roteiro de ensaio" in r.text and "📸 Instagram" in r.text and "modo demonstração" in r.text
-    assert "emporio_conversa" in r.cookies
+def test_inicio_vai_para_o_atendimento_e_simulador_tem_roteiro(demo):
+    c, _ = demo
+    r = c.get("/")
+    assert r.status_code == 200 and "Atendimento" in r.text and "Nenhuma conversa ainda" in r.text
+    s = c.get("/simulador")
+    assert "Simulador de WhatsApp" in s.text and "Roteiro de ensaio" in s.text and "📸 Instagram" in s.text
 
 
-def test_mensagem_via_htmx_responde_com_rastro(cliente_demo):
-    cliente_demo.get("/")
-    r = cliente_demo.post("/mensagem", data={"texto": "Quanto custa o Takamine GD20?"}, headers={"HX-Request": "true"})
-    assert r.status_code == 200 and 'id="painel"' in r.text and "R$ 2.089,05" in r.text and "buscar_produtos" in r.text
-    assert "assistente virtual com IA" in r.text                                   # aviso na primeira resposta
+def test_abrir_o_simulador_nao_cria_conversa(demo):
+    c, repo = demo
+    c.get("/simulador")
+    assert repo.listar() == []
 
 
-def test_sem_htmx_redireciona_e_conversa_fica_na_sessao(cliente_demo):
-    r = cliente_demo.post("/mensagem", data={"texto": "Estão abertos agora?"}, follow_redirects=False)
-    assert r.status_code == 303
-    assert "14 de Maio" in cliente_demo.get("/").text
+def test_mensagem_do_simulador_vira_conversa_no_painel(demo):
+    c, repo = demo
+    r = c.post("/simulador/mensagem", data={"texto": "Quanto custa o Takamine GD20?"}, headers=HX)
+    assert 'id="painel"' in r.text and "R$ 2.089,05" in r.text and "buscar_produtos" in r.text
+    [conv] = repo.listar()
+    assert conv.telefone == "(67) 9****-0001" and conv.status == "lia" and conv.total == 2
+    painel = c.get("/atendimento/lista").text
+    assert "(67) 9****-0001" in painel and "com a Lia" in painel
+    assert "R$ 2.089,05" in c.get(f"/atendimento/{conv.id}").text
 
 
-def test_origem_aparece_no_painel(cliente_demo):
-    cliente_demo.get("/")
-    r = cliente_demo.post("/mensagem", data={"texto": "Olá! Quero mais informações 🎬"}, headers={"HX-Request": "true"})
-    assert "🎬 TikTok" in r.text and "Chegar por um canal" not in r.text            # botões só no início
+def test_vendedor_assume_responde_e_devolve(demo):
+    c, repo = demo
+    c.post("/simulador/mensagem", data={"texto": "Quero falar com um vendedor"}, headers=HX)
+    [conv] = repo.listar()
+    assert conv.aguardando_vendedor
+    assert c.post(f"/atendimento/{conv.id}/responder", data={"texto": "Oi"}).status_code == 409   # sem assumir
+    c.post(f"/atendimento/{conv.id}/assumir")
+    c.post(f"/atendimento/{conv.id}/responder", data={"texto": "Olá! Sou o Carlos, em que posso ajudar?"})
+    r = c.post("/simulador/mensagem", data={"texto": "Quero ver um violão"}, headers=HX)
+    assert "Sou o Carlos" in r.text and "Vendedor da loja" in r.text and "a Lia está pausada" in r.text
+    autores = [m.autor for m in repo.mensagens(conv.id)]
+    assert autores[-3:] == ["sistema", "vendedor", "cliente"]                      # a Lia não respondeu
+    c.post(f"/atendimento/{conv.id}/devolver")
+    c.post("/simulador/mensagem", data={"texto": "Estão abertos agora?"}, headers=HX)
+    assert repo.mensagens(conv.id)[-1].autor == "lia" and repo.conversa(conv.id).status == "lia"
 
 
-def test_conversas_separadas_por_navegador(cliente_demo, tmp_path):
-    outro = TestClient(cliente_demo.app)
-    cliente_demo.post("/mensagem", data={"texto": "Estão abertos agora?"})
-    assert "14 de Maio" not in outro.get("/").text
+def test_alerta_e_origem_no_painel(catalogo, tmp_path):
+    central = CentralAlertas(TocadorFalso(), tmp_path / "alertas.jsonl")
+    llm = FakeLLMClient([chamar("info_loja"), responder("Claro, vou chamar alguém da equipe.")])
+    agente = Agente(llm, Toolbox(catalogo, carregar_manual(), tickets_path=tmp_path / "t.jsonl"), alertas=central)
+    c = TestClient(criar_app(agente, Config(), Repositorio(tmp_path / "a.db")))
+    c.post("/simulador/mensagem", data={"texto": "Quero falar com um vendedor 📸"}, headers=HX)
+    alertas = c.get("/atendimento/alertas").text
+    assert "Pediu um vendedor" in alertas and "📸 Instagram" in alertas
+    lista = c.get("/atendimento/lista").text
+    assert "pediu vendedor" in lista and "📸 Instagram" in lista
+    assert "Alerta para o vendedor" not in c.get("/simulador/thread").text           # o cliente não vê o alerta
 
 
-def test_nova_conversa_limpa(cliente_demo):
-    cliente_demo.post("/mensagem", data={"texto": "Estão abertos agora?"})
-    cliente_demo.post("/nova")
-    assert "Nenhuma mensagem ainda" in cliente_demo.get("/").text
+def test_historico_sobrevive_ao_reinicio_e_telefone_nao_fica_em_claro(tmp_path):
+    config = replace(Config(), llm_provider="fake", tickets_path=tmp_path / "t.jsonl")
+    banco = tmp_path / "atendimento.db"
+    c1 = TestClient(criar_app(montar_agente(config), config, Repositorio(banco)))
+    c1.post("/simulador/mensagem", data={"texto": "pedido 8, telefone (67) 99654-7821"})
+    c2 = TestClient(criar_app(montar_agente(config), config, Repositorio(banco)))     # "reiniciou"
+    [conv] = Repositorio(banco).listar()
+    pagina = c2.get(f"/atendimento/{conv.id}").text
+    assert "pedido 8" in pagina and "99654-7821" not in pagina
+    dump = "\n".join(sqlite3.connect(banco).iterdump())
+    assert "98888-0001" not in dump and "99654-7821" not in dump and chave_do_telefone("(67) 98888-0001") in dump
 
 
-def test_html_do_cliente_e_escapado(cliente_demo):
-    r = cliente_demo.post("/mensagem", data={"texto": "<script>alert(1)</script>"}, headers={"HX-Request": "true"})
+def test_trocar_de_cliente_separa_conversas_e_apagar(demo):
+    c, repo = demo
+    c.post("/simulador/mensagem", data={"texto": "Estão abertos agora?"})
+    c.get("/simulador", params={"telefone": "(81) 97777-0002"})
+    c.post("/simulador/mensagem", data={"texto": "Qual o endereço?"})
+    assert {x.telefone for x in repo.listar()} == {"(67) 9****-0001", "(81) 9****-0002"}
+    c.post("/simulador/apagar")
+    assert {x.telefone for x in repo.listar()} == {"(67) 9****-0001"}
+    assert "inválido" in c.get("/simulador", params={"telefone": "123"}).text
+
+
+def test_html_do_cliente_e_escapado(demo):
+    c, _ = demo
+    r = c.post("/simulador/mensagem", data={"texto": "<script>alert(1)</script>"}, headers=HX)
     assert "<script>alert(1)</script>" not in r.text and "&lt;script&gt;" in r.text
+
+
+def test_conversa_inexistente_404(demo):
+    c, _ = demo
+    assert c.get("/atendimento/naoexiste").status_code == 404
 
 
 def test_formatar_markdown_minimo_e_seguro():
     assert formatar("**R$ 10** e _nota_ <b>") == "<strong>R$ 10</strong> e <em>nota</em> &lt;b&gt;"
     assert formatar("protocolo SIM_2026_0001") == "protocolo SIM_2026_0001"
-
-
-def test_alerta_vai_para_conversa_e_painel_do_vendedor(catalogo, tmp_path):
-    central = CentralAlertas(TocadorFalso(), tmp_path / "alertas.jsonl")
-    llm = FakeLLMClient([chamar("info_loja"), responder("Claro, vou chamar alguém da equipe.")])
-    agente = Agente(llm, Toolbox(catalogo, carregar_manual(), tickets_path=tmp_path / "t.jsonl"), alertas=central)
-    c = TestClient(criar_app(agente, Config()))
-    r = c.post("/mensagem", data={"texto": "Olá! Quero falar com um vendedor 📸"}, headers={"HX-Request": "true"})
-    assert "Alerta para o vendedor" in r.text
-    painel = c.get("/vendedor/alertas").text
-    assert "Cliente pediu um vendedor" in painel and "📸 Instagram" in painel
-    assert "Ativar som" in c.get("/vendedor").text

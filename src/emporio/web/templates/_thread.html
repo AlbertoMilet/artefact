@@ -1,0 +1,45 @@
+{# Conversa em balões. `lado`: "cliente" (simulador) ou "loja" (painel). Recarregada a cada 2 s. #}
+<div id="thread" class="border rounded p-2 chat" aria-live="polite"
+     hx-get="{{ url_thread }}" hx-trigger="every 2s" hx-swap="outerHTML">
+  {% for m in mensagens %}
+    {% set meu = (lado == "cliente" and m.autor == "cliente") or (lado == "loja" and m.autor in ("lia", "vendedor")) %}
+    {% if m.autor == "sistema" %}
+    <div class="d-flex justify-content-center mb-2">
+      <div class="msg msg-sistema rounded px-2 py-1 small">{{ m.texto }} · {{ m.hora }}</div>
+    </div>
+    {% elif m.autor == "alerta" %}
+      {% if lado == "loja" %}
+      <div class="d-flex justify-content-center mb-2">
+        <div class="msg msg-alerta rounded px-2 py-1 small">Alerta para o vendedor: {{ m.texto }}</div>
+      </div>
+      {% endif %}
+    {% else %}
+    <div class="d-flex {% if meu %}justify-content-end{% endif %} mb-2">
+      <div class="msg rounded px-2 py-1 {% if m.autor == 'cliente' %}msg-cliente{% elif m.autor == 'vendedor' %}msg-vendedor{% else %}msg-lia{% endif %}">
+        {% if m.autor == "lia" %}<div class="autor small">Lia</div>
+        {% elif m.autor == "vendedor" %}<div class="autor autor-vendedor small">Vendedor da loja</div>
+        {% elif lado == "loja" %}<div class="autor autor-cliente small">Cliente</div>{% endif %}
+        <div class="text-break" style="white-space: pre-line">{{ m.texto|formatar }}</div>
+        {% set d = m.detalhes %}
+        {% if d.aviso %}<div class="aviso mt-1">Você está falando com uma assistente virtual com IA. Seus dados são usados só para este atendimento.</div>{% endif %}
+        {% if d.rastro or d.origem %}
+        <details class="mt-1">
+          <summary>Ferramentas ({{ d.rastro|length }}){% if d.origem %} · origem detectada{% endif %} · {{ d.metricas }}</summary>
+          {% if d.origem %}<div class="rastro rounded px-2 py-1 mt-1">Origem do lead: <strong>{{ d.origem }}</strong> (emoji removido antes do modelo)</div>{% endif %}
+          {% for e in d.rastro %}
+          <div class="rastro rounded px-2 py-1 mt-1">
+            <strong>{{ e.tool }}</strong> · {{ e.ms }} ms {% if e.erro %}<span class="text-danger">· erro: {{ e.erro }}</span>{% endif %}
+            <div><code>{{ e.args }}</code></div>
+            <div><code>{{ e.resultado }}</code></div>
+          </div>
+          {% endfor %}
+        </details>
+        {% endif %}
+        <div class="small text-body-secondary text-end">{% if d.segura %}resposta segura · {% endif %}{{ m.hora }}</div>
+      </div>
+    </div>
+    {% endif %}
+  {% else %}
+  <p class="vazio text-body-secondary small m-2">Nenhuma mensagem ainda.{% if lado == "cliente" %} Escreva abaixo, escolha uma pergunta do roteiro ou chegue por um canal.{% endif %}</p>
+  {% endfor %}
+</div>

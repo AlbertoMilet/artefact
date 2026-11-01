@@ -1,0 +1,24 @@
+{# Lista de conversas; recarregada a cada 3 s. #}
+<div id="lista" hx-get="/atendimento/lista" hx-trigger="every 3s" hx-swap="outerHTML">
+  {% if conversas %}
+  <div class="list-group">
+    {% for c in conversas %}
+    <a class="list-group-item list-group-item-action {% if c.aguardando_vendedor %}aguardando{% endif %}" href="/atendimento/{{ c.id }}">
+      <div class="d-flex flex-wrap justify-content-between gap-2">
+        <strong>{{ c.telefone }}</strong>
+        <span class="small text-body-secondary">{{ c.atualizada_em[8:10] }}/{{ c.atualizada_em[5:7] }} {{ c.atualizada_em[11:16] }}</span>
+      </div>
+      <div class="d-flex flex-wrap gap-1 my-1">
+        {% if c.aguardando_vendedor %}<span class="badge text-bg-warning">pediu vendedor</span>{% endif %}
+        {% if c.status == "vendedor" %}<span class="badge status-vendedor">com vendedor</span>{% else %}<span class="badge status-lia">com a Lia</span>{% endif %}
+        {% if c.origem %}<span class="badge canal">{{ c.origem|origem }}</span>{% endif %}
+        <span class="badge text-bg-light">{{ c.total }} mensage{{ "m" if c.total == 1 else "ns" }}</span>
+      </div>
+      <div class="small text-body-secondary text-truncate">{{ c.ultima }}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-body-secondary small">Nenhuma conversa ainda. Abra o <a href="/simulador">Simulador de WhatsApp</a> e mande uma mensagem como cliente.</p>
+  {% endif %}
+</div>

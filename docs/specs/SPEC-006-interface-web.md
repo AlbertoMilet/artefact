@@ -1,6 +1,6 @@
 # SPEC-006: Interface web do atendimento (estilo do painel ALJ)
 
-- **Status:** concluída
+- **Status:** concluída (as telas foram reorganizadas pela [SPEC-007](SPEC-007-atendimento-humano.md): "Simulador de WhatsApp" e "Atendimento")
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Origem:** pedido do usuário em 01/11/2026: "substitua a CLI por uma UI estilo da ALJ". O painel do projeto ALJ usa FastAPI, Jinja2, Bootstrap 5.3 e HTMX, com navbar de marca e um simulador de WhatsApp em balões.

@@ -12,19 +12,43 @@
 <body>
   <nav class="navbar navbar-expand emp-navbar mb-3">
     <div class="container">
-      <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="/atendimento">
         <img src="/static/marca.png" alt="Empório da Música" class="emp-logo-sm">
         <span class="fw-semibold emp-brand-text d-none d-md-inline">Empório da Música</span>
       </a>
       <div class="navbar-nav me-auto">
-        <a class="nav-link {% if ativo == 'atendimento' %}active{% endif %}" href="/">Atendimento</a>
-        <a class="nav-link {% if ativo == 'vendedor' %}active{% endif %}" href="/vendedor">Painel do vendedor</a>
+        <a class="nav-link {% if ativo == 'atendimento' %}active{% endif %}" href="/atendimento">Atendimento</a>
+        <a class="nav-link {% if ativo == 'simulador' %}active{% endif %}" href="/simulador">Simulador de WhatsApp</a>
       </div>
-      <span class="navbar-text small d-none d-sm-inline">ZDR obrigatório</span>
+      <span class="navbar-text small d-none d-sm-inline">{% if demo %}modo demonstração · {% endif %}ZDR obrigatório</span>
     </div>
   </nav>
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // Conversas trocadas por HTMX: mantém a rolagem no fim (como no WhatsApp), a não ser que a pessoa
+    // tenha subido para ler mensagens antigas e nada novo tenha chegado.
+    (() => {
+      let noFim = true, topo = 0, total = -1;
+      const thread = () => document.getElementById("thread");
+      document.body.addEventListener("htmx:beforeSwap", () => {
+        const t = thread();
+        if (!t) return;
+        topo = t.scrollTop;
+        noFim = t.scrollHeight - t.scrollTop - t.clientHeight < 40;
+      });
+      const restaurar = () => {
+        const t = thread();
+        if (!t) return;
+        const n = t.querySelectorAll(".msg").length;
+        t.scrollTop = (noFim || n !== total) ? t.scrollHeight : topo;
+        total = n;
+      };
+      document.body.addEventListener("htmx:afterSettle", restaurar);
+      restaurar();
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
