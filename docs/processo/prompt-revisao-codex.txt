@@ -1,0 +1,14 @@
+Contexto: tenho um QUESTIONÁRIO em "ARTEFACT/QUESTIONARIO_SPECS_desafio_ai_eng.md" cujas respostas servirão para escrever a SPEC (spec-driven development) da solução do desafio técnico em "ARTEFACT/Desafio Técnico AI Engineer 2026/desafio_tecnico_ai_eng_artefact.pdf" (agente de atendimento em Python para a loja fictícia Empório da Música; dados em "ARTEFACT/Desafio Técnico AI Engineer 2026/data/*.csv" e "data/políticas_da_loja.pdf").
+
+O questionário aproveita a experiência de dois projetos nossos:
+- "Alj/": bot de atendimento WhatsApp com máquina de estados, LLM com fallback manual, handoff humano (aba Atendimento), auditoria, LGPD. Ver Alj/Specs/SPECS_ALJ_Plataforma_Campeonatos_v1.1.md, Alj/AGENTS.md, Alj/app/modules/whatsapp/ (conversation.py, attendance.py, simulator.py, providers/).
+- "Trato facil empresas/": padrão de specs (docs/specs/TEMPLATE.md, README.md, 001-*.md), extração por LLM (Gemini) com JSON validado, mascaramento de dados (app/services/mascarar.py).
+
+Tarefa: revise o questionário.
+1. Leia o PDF do desafio, os CSVs e o PDF de políticas. Confira as inconsistências e armadilhas listadas no questionário (seção 0) e aponte as que faltam, citando arquivo/linha, order_id ou product_id.
+2. Confira se as lições atribuídas ao ALJ e ao Trato Fácil procedem (arquivo:linha) e aponte outras aplicáveis.
+3. Aponte perguntas faltantes, redundantes ou mal formuladas, e recomendações padrão com as quais você discorda (com justificativa).
+4. Diga o que um avaliador da Artefact provavelmente valoriza e que o questionário não cobre.
+
+Somente leitura: NÃO altere, crie nem apague arquivos, NÃO faça commit, NÃO faça chamadas de rede que modifiquem algo. NÃO leia arquivos .env, .venv, instance/, storage/, Docs/ do Alj (dados pessoais) nem tmp/.
+Responda em português, em markdown, objetivo: erros factuais com referência, lacunas, sugestões com impacto/esforço, o que simplificar.
