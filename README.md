@@ -26,6 +26,8 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 - 255 testes automatizados, sem rede e sem chave;
 - 42 cenários com o modelo real, 3 repetições cada: as 126 execuções passaram nos verificadores, sem falha crítica ([relatório](docs/avaliacao.md)). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não avaliam nuance de tom.
 
+**Além do pedido:** quatro protótipos do que um atendimento por WhatsApp precisaria em produção. São eles retenção do cliente na janela de 24 h, alerta sonoro para o vendedor, conexão do número da loja à Meta (login com Facebook e código por SMS) e origem do lead por canal. Ficam [numa seção própria](#funcionalidades-extras), desligados ou isolados por padrão.
+
 | O enunciado pede | Seção |
 |---|---|
 | Instruções para rodar | [Como rodar](#como-rodar) |
