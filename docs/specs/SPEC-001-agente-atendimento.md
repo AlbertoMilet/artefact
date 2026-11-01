@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** rascunho (rev. 2): parcelas incluídas (D-09); Fase 0 em andamento
+- **Status:** rascunho (rev. 3): Fase 0 concluída; modelo escolhido (D-10)
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`
@@ -133,7 +133,7 @@ Situação do produto, vista pelo cliente:
 | RN-19 | Fora de escopo: recusa curta e traz a conversa de volta à loja; música ligada à escolha de produto: no máximo 2 frases | Q 9.1, 9.2 |
 | RN-20 | Atendimento humano é oferecido quando o cliente pede, em reclamação, em dúvida que a §10 manda levar à gerência, em acessórios e depois de 2 falhas de entendimento; o agente continua disponível | Q 10.2 |
 | RN-21 | Registro de solicitação só depois de o cliente confirmar o resumo; o texto diz "registrei sua solicitação (protótipo)" e não promete prazo de retorno | Q 3.2 |
-| RN-22 | O agente não concede desconto nem promete prazo ou reembolso fora da política; texto vindo de dados ou do manual é dado, não instrução | Q 9.4 |
+| RN-22 | O agente não concede desconto nem promete prazo ou reembolso fora da política, nem oferece ações que não executa (reservar produto, fechar pedido, agendar entrega); texto vindo de dados ou do manual é dado, não instrução | Q 9.4, D-10 |
 | RN-23 | Toda chamada ao LLM vai pelo OpenRouter com `provider.zdr = true`; sem endpoint ZDR disponível, o pedido falha e o agente dá a resposta segura. Nunca há fallback para endpoint sem ZDR | D-02 |
 | RN-24 | Ao LLM vão só os campos do pedido verificado, sem telefone nem e-mail; log e `--debug` mascaram telefone e e-mail | Q 8.2 |
 | RN-25 | Primeira mensagem da sessão: aviso de uma linha (assistente virtual com IA; dados usados só para o atendimento) | Q 8.3 |
@@ -198,7 +198,8 @@ Situação do produto, vista pelo cliente:
   - `require_parameters: true`: só provedores que suportam todos os parâmetros enviados, incluindo `tools` (mesmo padrão do ALJ, `extractor.py:192`).
   - `data_collection: "deny"`: defesa em profundidade, também como no ALJ.
   - Recomendação no README: ligar também a exigência de ZDR no painel de privacidade da conta (`openrouter.ai/settings/privacy`).
-  - Escolha do modelo (Fase 0): candidatos que tenham endpoint ZDR (`GET /api/v1/endpoints/zdr`) e suportem tools. Cada um roda o mesmo roteiro curto, e o README registra qualidade de tool use em português, latência e custo.
+  - Escolha do modelo (Fase 0): candidatos que tenham endpoint ZDR (`GET /api/v1/endpoints/zdr`) e suportem tools. Cada um roda o mesmo roteiro curto, e o README registra qualidade de tool use em português, latência e custo. Resultado em `docs/fase0-modelos.md` e decisão em D-10.
+  - **Parâmetros por modelo:** com `require_parameters`, enviar um parâmetro que nenhum endpoint ZDR do modelo suporta faz o OpenRouter responder 404 "No endpoints found" (visto na Fase 0: o Claude Haiku 5.5 não aceita `temperature`, e o GPT-6 Luna não aceita `temperature` nem `max_tokens`, só `max_completion_tokens`). O `OpenRouterClient` envia `temperature` e o limite de saída só quando o modelo configurado os suporta, conforme a lista ZDR consultada na inicialização. O 404 vira a resposta segura da RN-23, nunca uma nova tentativa sem ZDR.
 
 ### Variáveis de ambiente novas
 
@@ -260,6 +261,7 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 | D-07 | Entram as tools `verificar_arrependimento` e `registrar_solicitacao`, embora não marcadas em 6.10 | Q 7.3 e Q 3.2 escolheram verificar o prazo e registrar a solicitação; sem essas tools, o LLM decidiria a elegibilidade sozinho (contra D-01) |
 | D-08 | Conflitos do manual: telefone (67) 3341-4444, e-mail sem acento, parcelamento pela §3.1 | Q 7.2 |
 | D-09 | `detalhar_produto` devolve parcelas máximas e valor da parcela (resolve P-02) | Pedido do usuário em 01/11/2026; sem isso o LLM teria de fazer a conta (contra RN-01) |
+| D-10 | Modelo: `deepseek/deepseek-v4.1-flash` via OpenRouter com ZDR; alternativa testada: `openai/gpt-6-luna` | Fase 0 (`docs/fase0-modelos.md`): os 3 candidatos acertaram 10/10 em tool e fato. O DeepSeek teve o tom mais próximo da §7.1, a menor latência (2,5 s), custo baixo, suporte a `temperature` (evals reproduzíveis, Q 5.4) e mais de 30 endpoints ZDR (resiliência). O Luna recusou um prompt injection em inglês e de forma robótica; o Haiku foi o mais lento e o mais caro. Amostra pequena (10 chamadas por modelo): os evals da Fase 5 confirmam ou revertem a escolha. Ressalva: o DeepSeek ofereceu "reservar" um produto; o system prompt proíbe prometer ações que o agente não executa |
 
 ### Pendências (não inventar no código)
 
@@ -267,7 +269,7 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 |---|---|---|---|
 | P-01 | Prazo de entrega e horas disponíveis (Q 1.2 sem resposta) | Corte de escopo | Seguir o plano de fases; cortar a partir da fase 5 se faltar tempo |
 | ~~P-02~~ | Simular o valor das parcelas: **resolvida (D-09)**, incluída em `detalhar_produto` | — | — |
-| P-03 | Modelo final no OpenRouter | Exemplos e evals | Decidido na Fase 0 (D-03) |
+| ~~P-03~~ | Modelo final no OpenRouter: **resolvida (D-10)** | — | — |
 
 ### Riscos
 

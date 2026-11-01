@@ -130,14 +130,44 @@ def info_loja():
 FUNCOES = {"buscar_produtos": buscar_produtos, "consultar_politicas": consultar_politicas, "info_loja": info_loja}
 
 
-def rodar(cliente: OpenAI, modelo: str, pergunta: str) -> dict:
+def parametros_suportados(modelos: list[str]) -> dict[str, dict]:
+    """Monta os parâmetros opcionais que cada modelo aceita em algum endpoint ZDR.
+
+    Com require_parameters, mandar um parâmetro que nenhum endpoint ZDR suporta (ex.: temperature
+    em modelos de raciocínio) faz o OpenRouter devolver 404 "No endpoints found".
+    """
+    from urllib.request import urlopen
+    with urlopen("https://openrouter.ai/api/v1/endpoints/zdr", timeout=30) as resp:
+        dados = json.load(resp)["data"]
+    params: dict[str, dict] = {}
+    for m in modelos:
+        eps = [set(e.get("supported_parameters") or []) for e in dados if e["model_id"] == m]
+        eps = [s for s in eps if "tools" in s]
+        if not eps:
+            params[m] = {"_sem_endpoint": True}
+            continue
+        p: dict = {}
+        if any("temperature" in s for s in eps):
+            p["temperature"] = 0.2
+        if any("max_tokens" in s for s in eps):
+            p["max_tokens"] = 600
+        elif any("max_completion_tokens" in s for s in eps):
+            p["max_completion_tokens"] = 600
+        params[m] = p
+    return params
+
+
+def rodar(cliente: OpenAI, modelo: str, pergunta: str, extras: dict) -> dict:
     msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": pergunta}]
     tools_usadas, tok_in, tok_out, custo = [], 0, 0, 0.0
     t0 = time.perf_counter()
     for _ in range(5):
+        kwargs = {k: v for k, v in extras.items() if k in ("temperature", "max_tokens")}
+        body = {"provider": PROVIDER, "usage": {"include": True}}
+        if "max_completion_tokens" in extras:
+            body["max_completion_tokens"] = extras["max_completion_tokens"]
         r = cliente.chat.completions.create(
-            model=modelo, messages=msgs, tools=TOOLS, temperature=0.2, max_tokens=600,
-            extra_body={"provider": PROVIDER, "usage": {"include": True}})
+            model=modelo, messages=msgs, tools=TOOLS, extra_body=body, **kwargs)
         u = r.usage
         if u:
             tok_in += u.prompt_tokens or 0
@@ -162,8 +192,10 @@ def rodar(cliente: OpenAI, modelo: str, pergunta: str) -> dict:
 
 def avaliar(caso, r) -> tuple[bool, bool]:
     _, tool, deve, proibido = caso
-    tool_ok = (tool in r["tools"]) if tool else True
     texto = r["resposta"]
+    if texto.startswith("[ERRO]"):
+        return False, False
+    tool_ok = (tool in r["tools"]) if tool else True
     fato_ok = bool(re.search(deve, texto, re.I)) and not (proibido and re.search(proibido, texto, re.I))
     return tool_ok, fato_ok
 
@@ -180,14 +212,17 @@ def main() -> int:
         return 2
     cliente = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=chave, timeout=60)
 
+    modelos = a.modelos.split(",")
+    params = parametros_suportados(modelos)
     linhas_resumo, detalhes = [], []
-    for modelo in a.modelos.split(","):
+    for modelo in modelos:
+        print(f"{modelo}: parâmetros enviados {params[modelo] or '{}'}")
         acertos_tool = acertos_fato = n = 0
         seg = custo = 0.0
         for caso in CASOS:
             for _ in range(a.repeticoes):
                 try:
-                    r = rodar(cliente, modelo, caso[0])
+                    r = rodar(cliente, modelo, caso[0], params[modelo])
                 except Exception as e:
                     r = {"resposta": f"[ERRO] {e}", "tools": [], "seg": 0, "tok_in": 0, "tok_out": 0,
                          "custo": 0, "provedor": None}
@@ -201,12 +236,14 @@ def main() -> int:
                 print(f"{modelo:32} tool={'ok' if t_ok else 'X '} fato={'ok' if f_ok else 'X '} "
                       f"{r['seg']:5.1f}s  {caso[0][:45]}")
         linhas_resumo.append(f"| `{modelo}` | {acertos_tool}/{n} | {acertos_fato}/{n} | {seg / n:.1f} s | "
-                             f"US$ {custo:.5f} |")
+                             f"US$ {custo:.5f} | `{json.dumps(params[modelo])}` |")
 
     out = ["# Fase 0: comparação de modelos (OpenRouter, ZDR)", "",
            f"Gerado por `scripts/comparar_modelos.py` em {time.strftime('%Y-%m-%d %H:%M')}. "
-           f"Toda requisição com `provider = {json.dumps(PROVIDER)}`. Temperatura 0,2.", "",
-           "| Modelo | Tool certa | Fato certo | Latência média | Custo total |", "|---|---|---|---|---|",
+           f"Toda requisição com `provider = {json.dumps(PROVIDER)}`. Parâmetros opcionais só quando "
+           "algum endpoint ZDR do modelo os suporta (temperatura 0,2; até 600 tokens de saída).", "",
+           "| Modelo | Tool certa | Fato certo | Latência média | Custo total | Parâmetros |",
+           "|---|---|---|---|---|---|",
            *linhas_resumo, "", "## Respostas", ""]
     for modelo, perg, r, t_ok, f_ok in detalhes:
         out += [f"### `{modelo}`: {perg}", "",
