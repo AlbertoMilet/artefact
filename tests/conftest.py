@@ -13,6 +13,14 @@ def catalogo():
 
 
 @pytest.fixture(autouse=True)
+def sem_env_real(request, monkeypatch):
+    """Testes padrão não leem o .env do usuário (resultado não depende dele); só os @llm precisam da chave."""
+    if request.node.get_closest_marker("llm") is None:
+        monkeypatch.setattr("emporio.config.load_dotenv", lambda *a, **k: None)
+        monkeypatch.setattr("emporio.cli_whatsapp.load_dotenv", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def preferencias_isoladas(monkeypatch, tmp_path):
     """Nenhum teste lê ou grava o .emporio.json real do usuário."""
     monkeypatch.setenv("EMPORIO_PREFERENCIAS", str(tmp_path / "prefs.json"))
