@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** em implementação (rev. 8): Fases 0 a 5 concluídas
+- **Status:** concluída (rev. 9): Fases 0 a 6 entregues
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`

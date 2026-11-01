@@ -1,0 +1,13 @@
+# Instruções para agentes de código (Empório da Música)
+
+- Spec vigente: `docs/specs/SPEC-001-agente-atendimento.md`. Regras são citadas por número (RN-xx), decisões por D-xx, critérios de aceite por CA-xx.
+- Implemente em incrementos pequenos, cada um com testes passando, e cite a spec no commit: `feat: busca de produtos (spec 001)`.
+- Nada de preço, estoque, status, prazo ou valor de parcela que não venha de tool (RN-01). As tools devolvem valores já formatados; o LLM não faz contas.
+- Regras de negócio ficam em `src/emporio/rules/` como funções puras (sem banco, rede ou LLM), com testes unitários e valores esperados escritos à mão. Se um teste falhar, confira a regra no manual (`src/emporio/policies/manual.md`) antes de mudar o código ou o teste.
+- Dinheiro em `Decimal`; datas com fuso `America/Campo_Grande`; relógio sempre injetado (`emporio.rules.horario`).
+- Toda chamada ao OpenRouter leva `provider.zdr = true`. Nunca adicione fallback sem ZDR nem parâmetros que o modelo não suporte nos endpoints ZDR.
+- Telefone e e-mail de clientes: nunca na saída das tools, mascarados em log, `--debug`, histórico e exemplos (RN-09, RN-24).
+- Tools devolvem erro estruturado (`{"erro": ...}`), nunca exceção para o agente.
+- Testes padrão (`uv run pytest`) rodam sem rede e sem chave; o que precisa do modelo real leva `@pytest.mark.llm`.
+- Não implemente nada marcado como PENDENTE na spec: deixe `# TODO P-0N`.
+- Antes de mudar prompt ou tools, rode `uv run python -m evals.rodar` e compare com `docs/avaliacao.md`.
