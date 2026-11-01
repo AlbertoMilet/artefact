@@ -15,7 +15,7 @@ from pathlib import Path
 
 from emporio import modelos
 
-CHAVES = {"modelo", "raciocinio", "retencao", "data_referencia"}
+CHAVES = {"modelo", "raciocinio", "retencao", "data_referencia", "alerta_sonoro"}
 
 
 def caminho() -> Path:
@@ -31,7 +31,7 @@ def validar(prefs: dict) -> dict:
             continue
         if chave == "modelo":
             out[chave] = modelos.resolver(str(valor))
-        elif chave in ("raciocinio", "retencao"):
+        elif chave in ("raciocinio", "retencao", "alerta_sonoro"):
             if not isinstance(valor, bool):
                 raise ValueError(f"{chave} deve ser verdadeiro ou falso")
             out[chave] = valor

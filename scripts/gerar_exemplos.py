@@ -77,7 +77,7 @@ ROTEIROS = [
 def gerar(config: Config, roteiro: Roteiro) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         agente = montar_agente(replace(config, data_referencia=roteiro.agora,
-                                       tickets_path=Path(tmp) / "tickets.jsonl"))
+                                       tickets_path=Path(tmp) / "tickets.jsonl", alertas=False))
         conversa = agente.nova_conversa()
         a = roteiro.agora
         linhas = [f"# {roteiro.titulo}", "", f"> {roteiro.cenario}", "",

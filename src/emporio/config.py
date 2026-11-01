@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from emporio import modelos, preferencias
 from emporio.agent import Agente
+from emporio.alertas import CentralAlertas, Tocador
 from emporio.data import carregar
 from emporio.llm import FakeLLMClient, LLMClient, OpenRouterClient
 from emporio.policies import carregar_manual
@@ -35,6 +36,8 @@ class Config:
     tickets_path: Path = RAIZ / "tickets.jsonl"
     retencao: ConfigRetencao = ConfigRetencao()
     raciocinio: bool = True                      # LLM_RACIOCINIO: raciocínio estendido do modelo no agente
+    alertas: bool = True                         # alertas para o vendedor (SPEC-003); evals e exemplos desligam
+    alerta_sonoro: bool = True                   # ALERTA_SONORO: som dos alertas
 
     @classmethod
     def do_ambiente(cls, env_file: Path | None = RAIZ / ".env", usar_preferencias: bool = True) -> "Config":
@@ -50,6 +53,8 @@ class Config:
             mudancas["openrouter_model"] = prefs["modelo"]
         if "raciocinio" in prefs:
             mudancas["raciocinio"] = prefs["raciocinio"]
+        if "alerta_sonoro" in prefs:
+            mudancas["alerta_sonoro"] = prefs["alerta_sonoro"]
         if "retencao" in prefs:
             mudancas["retencao"] = replace(self.retencao, ativa=prefs["retencao"])
         if "data_referencia" in prefs:
@@ -74,6 +79,7 @@ class Config:
             turn_timeout_s=float(os.getenv("TURN_TIMEOUT_S", "30")),
             history_window=int(os.getenv("HISTORY_WINDOW", "10")),
             raciocinio=os.getenv("LLM_RACIOCINIO", "true").strip().lower() != "false",
+            alerta_sonoro=os.getenv("ALERTA_SONORO", "true").strip().lower() != "false",
             tickets_path=Path(os.getenv("TICKETS_PATH", str(RAIZ / "tickets.jsonl"))),
             retencao=ConfigRetencao(
                 ativa=os.getenv("RETENCAO_ATIVA", "false").strip().lower() == "true",
@@ -104,7 +110,8 @@ def montar_agente(config: Config | None = None, llm: LLMClient | None = None) ->
     toolbox = Toolbox(carregar(config.data_dir), carregar_manual(), relogio, tickets_path=config.tickets_path)
     llm = llm or montar_llm(config)
     return Agente(llm, toolbox, config.max_tool_calls, config.turn_timeout_s, config.history_window,
-                  retencao=Retencao(llm, config.retencao), raciocinio=config.raciocinio)
+                  retencao=Retencao(llm, config.retencao), raciocinio=config.raciocinio,
+                  alertas=CentralAlertas(Tocador(ligado=config.alerta_sonoro)) if config.alertas else None)
 
 
 __all__ = ["Config", "FakeLLMClient", "montar_agente", "montar_llm"]

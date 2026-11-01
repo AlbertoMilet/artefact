@@ -122,7 +122,8 @@ def rodar_caso(config: Config, caso: Caso) -> Resultado:
     res = Resultado(caso)
     brutas: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
-        agente = montar_agente(replace(config, data_referencia=caso.agora, tickets_path=Path(tmp) / "tickets.jsonl"))
+        agente = montar_agente(replace(config, data_referencia=caso.agora, tickets_path=Path(tmp) / "tickets.jsonl",
+                                       alertas=False))
         cad = cadastro_de(agente)
         conversa = agente.nova_conversa()
         fontes_tools = cliente = ""

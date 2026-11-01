@@ -61,6 +61,7 @@ class RespostaTurno:
     motivo_segura: str | None = None
     texto_bruto: str = ""             # texto do modelo antes da máscara (só em memória: evals)
     respostas_vazias: int = 0         # respostas vazias do modelo neste turno (diagnóstico)
+    alertas: list = field(default_factory=list)   # alertas para o vendedor emitidos neste turno (SPEC-003)
 
 
 def _resumir(resultado: dict, limite: int = 400) -> str:
@@ -90,8 +91,9 @@ def _mascarar_mensagem(m: dict) -> dict:
 class Agente:
     def __init__(self, llm: LLMClient, toolbox: Toolbox, max_tool_calls: int = 5,
                  timeout_turno_s: float = 30, janela_turnos: int = 10, retencao: Retencao | None = None,
-                 raciocinio: bool = True):
+                 raciocinio: bool = True, alertas=None):
         self.llm = llm
+        self.alertas = alertas             # CentralAlertas (SPEC-003) ou None
         self.raciocinio = raciocinio       # False: pede ao modelo para não usar raciocínio estendido
         self.retencao = retencao
         self.toolbox = toolbox
@@ -189,6 +191,9 @@ class Agente:
             self.retencao.ao_responder(ac, self.toolbox.relogio(), conversa.sessao.atendimento_humano)
         visivel = mascarar_texto(texto_final)      # o cliente nunca vê contato completo de cliente (RN-09)
         resp.texto = f"{visivel}\n\n{AVISO_PRIVACIDADE}" if primeira else visivel
+        if self.alertas is not None:
+            resp.alertas = self.alertas.avaliar_turno(conversa.id, texto_cliente, resp.rastro, agora)
+            self.alertas.emitir(resp.alertas)
         resp.latencia_s = time.perf_counter() - inicio
         self._registrar_log(conversa, resp)
         return resp

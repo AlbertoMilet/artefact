@@ -1,6 +1,7 @@
 # Instruções para agentes de código (Empório da Música)
 
 - Specs vigentes: `docs/specs/SPEC-001-agente-atendimento.md` (agente) e `docs/specs/SPEC-002-inatividade-janela-24h.md` (retenção). Regras são citadas por número (RN-xx, RI-xx), decisões por D-xx, critérios de aceite por CA-xx e CI-xx.
+- Specs 003 (alerta para o vendedor): a detecção de pedido explícito é determinística (`emporio.alertas.deteccao`); evals e exemplos usam `alertas=False`.
 - A janela de 24 h conta só da última mensagem do cliente (`emporio.retencao.janela`); nada é enviado por iniciativa da loja fora dela, e a retenção fica desligada por padrão.
 - Implemente em incrementos pequenos, cada um com testes passando, e cite a spec no commit: `feat: busca de produtos (spec 001)`.
 - Nada de preço, estoque, status, prazo ou valor de parcela que não venha de tool (RN-01). As tools devolvem valores já formatados; o LLM não faz contas.

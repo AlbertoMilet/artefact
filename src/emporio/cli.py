@@ -5,8 +5,9 @@
     python -m emporio chat --fake          modo demonstração, sem chave nem modelo de linguagem
     python -m emporio chat -m "oi" -m "qual o endereço?"   mensagens em sequência, sem interação
     python -m emporio configurar           escolhe o modelo (deepseek, haiku, gpt-sol), raciocínio, retenção...
+    python -m emporio vendedor             vigia de alertas para o vendedor, em outro terminal (SPEC-003)
 
-Comandos durante a conversa: /novo (recomeça), /modelo [opção] (lista ou troca o modelo), /config,
+Comandos durante a conversa: /novo (recomeça), /modelo [opção] (lista ou troca o modelo), /config, /som,
 /sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
 Com --retencao (SPEC-002): /esperar 30m | 4h | 1d simula o silêncio do cliente e mostra os lembretes;
 /janela mostra a situação da janela de 24 h.
@@ -139,6 +140,14 @@ def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config:
         mostrar_janela(agente, conversa)
     elif baixo.startswith("/modelo"):
         print(_cor(cli_config.comando_modelo(agente, config or Config(), t[len("/modelo"):]) + "\n", "2"))
+    elif baixo == "/som":
+        central = agente.alertas
+        if central is None:
+            print(_cor("(alertas desligados nesta configuração)\n", "2"))
+        else:
+            central.tocador.ligado = not central.tocador.ligado
+            estado = "ligado" if central.tocador.ligado else "desligado (o aviso visual continua)"
+            print(_cor(f"Som dos alertas para o vendedor: {estado}\n", "2"))
     elif baixo == "/config":
         print(_cor(cli_config.comando_config(agente, config or Config()) + "\n", "2"))
     else:
@@ -175,6 +184,45 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: 
         mostrar(agente.responder(conversa, texto), debug)
 
 
+def aviso_vendedor(alerta) -> None:
+    """Aviso visual no terminal do chat (SPEC-003 RA-04): sai sempre, com ou sem som."""
+    extra = f" | conversa {alerta.conversa}" if alerta.tipo == "encaminhamento" else ""
+    print(_cor(f"  [alerta para o vendedor] {alerta.aviso()}{extra}", "1;33"))
+
+
+def vendedor(argv: list[str]) -> int:
+    """Vigia de alertas para o vendedor: observa a fila e toca o som (SPEC-003)."""
+    from emporio.alertas import Tocador
+    from emporio.alertas.central import caminho_fila, vigiar
+    ap = argparse.ArgumentParser(prog="emporio vendedor", description="Vigia de alertas para o vendedor")
+    ap.add_argument("--sem-som", action="store_true", help="só o aviso visual")
+    ap.add_argument("--intervalo", type=float, default=2.0, help="segundos entre leituras da fila (padrão 2)")
+    ap.add_argument("--testar", action="store_true", help="toca os dois padrões e sai")
+    a = ap.parse_args(argv)
+    config = Config.do_ambiente()
+    tocador = Tocador(ligado=config.alerta_sonoro and not a.sem_som)
+    if a.testar:
+        for tipo, nome in (("normal", "encaminhamento (duas notas)"), ("vendedor", "pedido de vendedor (tríade x2)")):
+            print(f"Tocando: {nome}" + ("" if tocador.ligado else " (som desligado)"))
+            tocador.tocar_e_esperar(tipo)
+        return 0
+    tty = sys.stdout.isatty()
+
+    def mostrar(linha: str) -> None:
+        if linha.startswith(chr(27) + "]0;"):
+            if tty:
+                sys.stdout.write(linha)
+                sys.stdout.flush()
+            return
+        print(_cor(linha, "1;33") if "]" in linha[:8] else linha, flush=True)
+
+    try:
+        vigiar(caminho_fila(), tocador, mostrar, a.intervalo)
+    except KeyboardInterrupt:
+        print()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     for fluxo in (sys.stdout, sys.stderr):
         if hasattr(fluxo, "reconfigure"):
@@ -182,15 +230,19 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["configurar"]:
         return cli_config.configurar(argv[1:])
+    if argv[:1] == ["vendedor"]:
+        return vendedor(argv[1:])
     ap = argparse.ArgumentParser(prog="emporio", description="Agente de atendimento da Empório da Música")
     sub = ap.add_subparsers(dest="comando", required=True)
     sub.add_parser("configurar", help="configura o agente: modelo (deepseek, haiku, gpt-sol), raciocínio, retenção")
+    sub.add_parser("vendedor", help="vigia de alertas para o vendedor (outro terminal)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")
     chat.add_argument("--modelo", help="deepseek, haiku, gpt-sol ou slug do OpenRouter (só nesta execução)")
     chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir; aceita /esperar e /janela)")
     chat.add_argument("--retencao", action="store_true", help="liga a retenção por inatividade (SPEC-002)")
+    chat.add_argument("--sem-som", action="store_true", help="alertas para o vendedor só com aviso visual (SPEC-003)")
     a = ap.parse_args(argv)
 
     configurar_log(RAIZ / "logs")
@@ -205,6 +257,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if a.retencao:
         config = replace(config, retencao=replace(config.retencao, ativa=True))
+    if a.sem_som:
+        config = replace(config, alerta_sonoro=False)
     try:
         agente = montar_agente(config)
     except DadosIndisponiveis as e:
@@ -214,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"LLM indisponível: {e}\nConfigure OPENROUTER_API_KEY no .env (veja .env.example) "
               "ou rode em modo demonstração: python -m emporio chat --fake", file=sys.stderr)
         return 2
+    if agente.alertas is not None:
+        agente.alertas.avisar = aviso_vendedor
     if a.debug:
         print(_cor(f"[modelo: {agente.llm.modelo} | ZDR obrigatório | dados: {config.data_dir}]", "2"))
     return conversar(agente, a.mensagem, a.debug, config)

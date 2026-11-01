@@ -53,6 +53,7 @@ def resumo(config: Config, prefs: dict, trocado_na_conversa: bool = False) -> st
         f"  Raciocínio estendido:   {'ligado' if config.raciocinio else 'desligado'}{origem('raciocinio')}",
         f"  Retenção (inatividade): {'ligada' if config.retencao.ativa else 'desligada'}{origem('retencao')}",
         f"  Data de referência:     {ref}{origem('data_referencia')}",
+        f"  Som dos alertas:        {'ligado' if config.alerta_sonoro else 'desligado'}{origem('alerta_sonoro')}",
         f"  Provedor do LLM:        {config.llm_provider} (sempre com Zero Data Retention)",
         f"  Chave do OpenRouter:    {'configurada' if config.openrouter_api_key else 'ausente (use --fake ou preencha o .env)'}",
         f"  Arquivo de preferências: {preferencias.caminho()}",
@@ -83,6 +84,7 @@ def configurar(argv: list[str]) -> int:
     ap.add_argument("--raciocinio", help="ligado ou desligado")
     ap.add_argument("--retencao", help="ligada ou desligada")
     ap.add_argument("--data-referencia", help='ISO 8601 (ex.: 2026-03-25T10:00) ou "nenhuma"')
+    ap.add_argument("--som", help="som dos alertas para o vendedor: ligado ou desligado")
     ap.add_argument("--mostrar", action="store_true", help="mostra a configuração efetiva")
     ap.add_argument("--redefinir", action="store_true", help="apaga as preferências salvas")
     ap.add_argument("--sem-verificar", action="store_true", help="não consulta a lista ZDR ao escolher o modelo")
@@ -96,7 +98,9 @@ def configurar(argv: list[str]) -> int:
         print("Configuração efetiva do agente:\n" + resumo(Config.do_ambiente(), prefs))
         return 0
     try:
-        if any(v is not None for v in (a.modelo, a.raciocinio, a.retencao, a.data_referencia)):
+        if any(v is not None for v in (a.modelo, a.raciocinio, a.retencao, a.data_referencia, a.som)):
+            if a.som is not None:
+                prefs["alerta_sonoro"] = bool_pt(a.som)
             if a.modelo is not None:
                 prefs["modelo"] = escolher_modelo(a.modelo)
                 if not a.sem_verificar:
@@ -130,7 +134,8 @@ def menu(prefs: dict, verificar: bool = True) -> dict | None:
     while True:
         config = Config.do_ambiente().com_preferencias(prefs)
         print("\nConfiguração do agente (salva em .emporio.json)\n" + resumo(config, prefs))
-        print("\n  1) Modelo   2) Raciocínio   3) Retenção   4) Data de referência   5) Salvar e sair   0) Sair sem salvar")
+        print("\n  1) Modelo   2) Raciocínio   3) Retenção   4) Data de referência   6) Som dos alertas   "
+              "5) Salvar e sair   0) Sair sem salvar")
         try:
             op = input("Opção: ").strip()
         except EOFError:
@@ -152,6 +157,8 @@ def menu(prefs: dict, verificar: bool = True) -> dict | None:
                 else:
                     datetime.fromisoformat(v)
                     prefs["data_referencia"] = v
+            elif op == "6":
+                prefs["alerta_sonoro"] = bool_pt(input("Som dos alertas para o vendedor (ligado/desligado): "))
             elif op == "5":
                 return prefs
             elif op == "0":
