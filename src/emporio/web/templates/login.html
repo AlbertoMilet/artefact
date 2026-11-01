@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Entrar · Empório da Música{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-sm-9 col-md-6 col-lg-4">
+    <div class="text-center my-4">
+      <img src="/static/marca.png" alt="Empório da Música" class="emp-logo-lg">
+      <h1 class="h4 mt-3 mb-0">Empório da Música</h1>
+      <p class="small text-body-secondary">Painel de atendimento</p>
+    </div>
+    {% if erro %}<div class="alert alert-danger py-2" role="alert">{{ erro }}</div>{% endif %}
+    {% if sem_usuarios %}
+    <div class="alert alert-warning small">
+      Nenhum usuário configurado. Gere uma linha com <code>uv run python -m emporio usuario criar seu_nome</code>,
+      coloque em <code>EMPORIO_USUARIOS</code> no <code>.env</code> e reinicie.
+    </div>
+    {% else %}
+    {% if login_demo %}
+    <div class="alert alert-info small">Modo demonstração sem usuários no <code>.env</code>: entre com
+      <strong>{{ usuario_demo }}</strong> / <strong>{{ senha_demo }}</strong>.</div>
+    {% endif %}
+    <form method="post" action="/login" class="card card-body shadow-sm">
+      <input type="hidden" name="proximo" value="{{ proximo }}">
+      <div class="mb-3">
+        <label class="form-label" for="usuario">Usuário</label>
+        <input class="form-control" id="usuario" name="usuario" value="{{ nome or '' }}" autocomplete="username" required autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="senha">Senha</label>
+        <input class="form-control" id="senha" name="senha" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary w-100">Entrar</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

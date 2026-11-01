@@ -40,6 +40,19 @@ def main(argv: list[str]) -> int:
     import uvicorn
 
     from emporio.web import criar_app
+    from emporio.web.auth import carregar_usuarios, segredo_da_sessao
+    try:
+        usuarios = carregar_usuarios()
+        _, segredo_fixo = segredo_da_sessao()
+    except ValueError as e:
+        print(f"Erro: {e}", file=sys.stderr)
+        return 2
+    if not usuarios:
+        print("Sem usuários em EMPORIO_USUARIOS: " + ("entre com demo / demo1234 (só no modo demonstração)."
+              if a.fake else "crie um com `python -m emporio usuario criar seu_nome`."))
+    if not segredo_fixo:
+        print("Sem EMPORIO_SEGREDO_SESSAO: as sessões caem quando o servidor reinicia "
+              "(`python -m emporio usuario segredo`).")
     url = f"http://{a.host}:{a.porta}"
     print(f"Empório da Música: atendimento em {url} (modelo {agente.llm.modelo}, ZDR obrigatório). Ctrl+C encerra.")
     if not a.sem_navegador:

@@ -5,7 +5,7 @@
     {% set meu = (lado == "cliente" and m.autor == "cliente") or (lado == "loja" and m.autor in ("lia", "vendedor")) %}
     {% if m.autor == "sistema" %}
     <div class="d-flex justify-content-center mb-2">
-      <div class="msg msg-sistema rounded px-2 py-1 small">{{ m.texto }} · {{ m.hora }}</div>
+      <div class="msg msg-sistema rounded px-2 py-1 small">{{ m.texto }}{% if lado == "loja" and m.detalhes.por %} ({{ m.detalhes.por }}){% endif %} · {{ m.hora }}</div>
     </div>
     {% elif m.autor == "alerta" %}
       {% if lado == "loja" %}
@@ -17,7 +17,7 @@
     <div class="d-flex {% if meu %}justify-content-end{% endif %} mb-2">
       <div class="msg rounded px-2 py-1 {% if m.autor == 'cliente' %}msg-cliente{% elif m.autor == 'vendedor' %}msg-vendedor{% else %}msg-lia{% endif %}">
         {% if m.autor == "lia" %}<div class="autor small">Lia</div>
-        {% elif m.autor == "vendedor" %}<div class="autor autor-vendedor small">Vendedor da loja</div>
+        {% elif m.autor == "vendedor" %}<div class="autor autor-vendedor small">Vendedor da loja{% if lado == "loja" and m.detalhes.por %} · {{ m.detalhes.por }}{% endif %}</div>
         {% elif lado == "loja" %}<div class="autor autor-cliente small">Cliente</div>{% endif %}
         <div class="text-break" style="white-space: pre-line">{{ m.texto|formatar }}</div>
         {% set d = m.detalhes %}

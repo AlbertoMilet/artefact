@@ -260,6 +260,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["ui"]:
         from emporio import cli_web
         return cli_web.main(argv[1:])
+    if argv[:1] == ["usuario"]:
+        from emporio import cli_usuario
+        return cli_usuario.main(argv[1:])
     if argv[:1] == ["configurar"]:
         return cli_config.configurar(argv[1:])
     if argv[:1] == ["vendedor"]:
@@ -277,6 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("whatsapp", help="conecta o WhatsApp da loja: login com Facebook e código por SMS (SPEC-004)")
     sub.add_parser("origem", help="links por canal e relatório de origem dos leads (SPEC-005)")
     sub.add_parser("ui", help="interface web do atendimento (padrão sem argumentos; SPEC-006)")
+    sub.add_parser("usuario", help="usuários do painel: criar, segredo, listar (SPEC-008)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")

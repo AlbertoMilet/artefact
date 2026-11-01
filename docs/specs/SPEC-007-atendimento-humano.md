@@ -45,6 +45,6 @@ O histórico fica em SQLite (`logs/atendimento.db`, fora do git; `EMPORIO_DB` mu
 
 ## 5. Limitações
 
-- **Sem login:** qualquer um com acesso à porta abre o painel. O servidor escuta só em 127.0.0.1 por padrão; em produção, o painel precisaria de autenticação.
+- **Login:** resolvido pela [SPEC-008](SPEC-008-login-do-painel.md).
 - **Um processo:** a trava de turno e o estado do agente em memória valem para um servidor só.
 - **O canal ainda é simulado:** o webhook real do WhatsApp (SPEC-004) entraria no lugar do simulador, chamando a mesma função que recebe a mensagem do cliente.

@@ -6,7 +6,7 @@
     <a class="list-group-item list-group-item-action alerta-item" href="/atendimento/{{ a.conversa }}"
        data-id="{{ a.id }}" data-tipo="{{ a.tipo }}" data-tocar="{{ '1' if a.tocar else '0' }}">
       <div class="d-flex justify-content-between gap-2">
-        <strong>{% if a.tipo == "pedido_vendedor" %}Pediu um vendedor{% else %}Encaminhada: {{ a.motivo }}{% endif %}</strong>
+        <strong>{% if a.tipo == "pedido_vendedor" %}Pediu um vendedor{% elif a.motivo %}Encaminhada: {{ a.motivo }}{% else %}{{ a.texto }}{% endif %}</strong>
         <span class="text-body-secondary">{{ a.hora }}</span>
       </div>
       {% if a.protocolo %}<div>Protocolo {{ a.protocolo }}</div>{% endif %}

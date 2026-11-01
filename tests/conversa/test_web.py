@@ -15,17 +15,25 @@ from emporio.policies import carregar_manual
 from emporio.tools import Toolbox
 from emporio.web import criar_app
 from emporio.web.app import formatar
+from emporio.web.auth import hash_senha
 from emporio.web.repositorio import Repositorio, chave_do_telefone
 from tests.unit.test_alertas import TocadorFalso
 
 HX = {"HX-Request": "true"}
+USUARIOS = {"carlos": hash_senha("senha-forte-1", iteracoes=1000)}
+
+
+def entrar(app) -> TestClient:
+    c = TestClient(app)
+    assert c.post("/login", data={"usuario": "carlos", "senha": "senha-forte-1"}).status_code == 200
+    return c
 
 
 @pytest.fixture
 def demo(tmp_path):
     config = replace(Config(), llm_provider="fake", tickets_path=tmp_path / "t.jsonl")
     repo = Repositorio(tmp_path / "atendimento.db")
-    return TestClient(criar_app(montar_agente(config), config, repo)), repo
+    return entrar(criar_app(montar_agente(config), config, repo, usuarios=USUARIOS)), repo
 
 
 def test_inicio_vai_para_o_atendimento_e_simulador_tem_roteiro(demo):
@@ -74,7 +82,7 @@ def test_alerta_e_origem_no_painel(catalogo, tmp_path):
     central = CentralAlertas(TocadorFalso(), tmp_path / "alertas.jsonl")
     llm = FakeLLMClient([chamar("info_loja"), responder("Claro, vou chamar alguém da equipe.")])
     agente = Agente(llm, Toolbox(catalogo, carregar_manual(), tickets_path=tmp_path / "t.jsonl"), alertas=central)
-    c = TestClient(criar_app(agente, Config(), Repositorio(tmp_path / "a.db")))
+    c = entrar(criar_app(agente, Config(), Repositorio(tmp_path / "a.db"), usuarios=USUARIOS))
     c.post("/simulador/mensagem", data={"texto": "Quero falar com um vendedor 📸"}, headers=HX)
     alertas = c.get("/atendimento/alertas").text
     assert "Pediu um vendedor" in alertas and "📸 Instagram" in alertas
@@ -86,9 +94,9 @@ def test_alerta_e_origem_no_painel(catalogo, tmp_path):
 def test_historico_sobrevive_ao_reinicio_e_telefone_nao_fica_em_claro(tmp_path):
     config = replace(Config(), llm_provider="fake", tickets_path=tmp_path / "t.jsonl")
     banco = tmp_path / "atendimento.db"
-    c1 = TestClient(criar_app(montar_agente(config), config, Repositorio(banco)))
+    c1 = entrar(criar_app(montar_agente(config), config, Repositorio(banco), usuarios=USUARIOS))
     c1.post("/simulador/mensagem", data={"texto": "pedido 8, telefone (67) 99654-7821"})
-    c2 = TestClient(criar_app(montar_agente(config), config, Repositorio(banco)))     # "reiniciou"
+    c2 = entrar(criar_app(montar_agente(config), config, Repositorio(banco), usuarios=USUARIOS))  # reiniciou
     [conv] = Repositorio(banco).listar()
     pagina = c2.get(f"/atendimento/{conv.id}").text
     assert "pedido 8" in pagina and "99654-7821" not in pagina

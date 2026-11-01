@@ -16,11 +16,14 @@
         <img src="/static/marca.png" alt="Empório da Música" class="emp-logo-sm">
         <span class="fw-semibold emp-brand-text d-none d-md-inline">Empório da Música</span>
       </a>
+      {% if usuario %}
       <div class="navbar-nav me-auto">
         <a class="nav-link {% if ativo == 'atendimento' %}active{% endif %}" href="/atendimento">Atendimento</a>
         <a class="nav-link {% if ativo == 'simulador' %}active{% endif %}" href="/simulador">Simulador de WhatsApp</a>
       </div>
-      <span class="navbar-text small d-none d-sm-inline">{% if demo %}modo demonstração · {% endif %}ZDR obrigatório</span>
+      <span class="navbar-text small me-3 d-none d-md-inline">{% if demo %}modo demonstração · {% endif %}ZDR obrigatório · {{ usuario }}</span>
+      <form method="post" action="/sair"><button class="btn btn-sm btn-outline-light">Sair</button></form>
+      {% endif %}
     </div>
   </nav>
   <main class="container">
