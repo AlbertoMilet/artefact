@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from emporio import modelos, preferencias
 from emporio.agent import Agente
+from emporio.agent.persona import Persona
 from emporio.alertas import CentralAlertas, Tocador
 from emporio.data import carregar
 from emporio.llm import FakeLLMClient, LLMClient, OpenRouterClient
@@ -39,6 +40,7 @@ class Config:
     alertas: bool = True                         # alertas para o vendedor (SPEC-003); evals e exemplos desligam
     alerta_sonoro: bool = True                   # ALERTA_SONORO: som dos alertas (no vigia do vendedor)
     som_no_chat: bool = False                    # ALERTA_SOM_NO_CHAT: tocar também no chat (sem vigia aberto)
+    persona: Persona = field(default_factory=Persona)   # SPEC-009: nome e tom do agente
 
     @classmethod
     def do_ambiente(cls, env_file: Path | None = RAIZ / ".env", usar_preferencias: bool = True) -> "Config":
@@ -61,6 +63,8 @@ class Config:
         if "data_referencia" in prefs:
             dt = datetime.fromisoformat(prefs["data_referencia"])
             mudancas["data_referencia"] = dt if dt.tzinfo else dt.replace(tzinfo=FUSO)
+        if "persona" in prefs:
+            mudancas["persona"] = Persona.de_dict(prefs["persona"])
         return replace(self, **mudancas)
 
     @classmethod
@@ -114,7 +118,7 @@ def montar_agente(config: Config | None = None, llm: LLMClient | None = None) ->
     return Agente(llm, toolbox, config.max_tool_calls, config.turn_timeout_s, config.history_window,
                   retencao=Retencao(llm, config.retencao, relogio), raciocinio=config.raciocinio,
                   alertas=CentralAlertas(Tocador(ligado=config.alerta_sonoro and config.som_no_chat))
-                  if config.alertas else None)
+                  if config.alertas else None, persona=config.persona)
 
 
 __all__ = ["Config", "FakeLLMClient", "montar_agente", "montar_llm"]

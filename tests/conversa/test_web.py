@@ -70,7 +70,7 @@ def test_vendedor_assume_responde_e_devolve(demo):
     c.post(f"/atendimento/{conv.id}/assumir")
     c.post(f"/atendimento/{conv.id}/responder", data={"texto": "Olá! Sou o Carlos, em que posso ajudar?"})
     r = c.post("/simulador/mensagem", data={"texto": "Quero ver um violão"}, headers=HX)
-    assert "Sou o Carlos" in r.text and "Vendedor da loja" in r.text and "a Lia está pausada" in r.text
+    assert "Sou o Carlos" in r.text and "Vendedor da loja" in r.text and "está em pausa" in r.text
     autores = [m.autor for m in repo.mensagens(conv.id)]
     assert autores[-3:] == ["sistema", "vendedor", "cliente"]                      # a Lia não respondeu
     c.post(f"/atendimento/{conv.id}/devolver")

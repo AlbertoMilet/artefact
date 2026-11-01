@@ -26,6 +26,7 @@ from emporio.agent.prompt import AVISO_PRIVACIDADE
 from emporio.config import Config, montar_agente
 from emporio.rules import origem as origem_lead
 from emporio.web.auth import Limitador, Sessoes, carregar_usuarios, conferir_senha, hash_senha, segredo_da_sessao
+from emporio.web.configuracoes import registrar_configuracoes
 from emporio.web.repositorio import Repositorio
 
 PASTA = Path(__file__).resolve().parent
@@ -72,8 +73,21 @@ def criar_app(agente: Agente | None = None, config: Config | None = None,
         usuarios = {USUARIO_DEMO: hash_senha(SENHA_DEMO)}
     sessoes = sessoes or Sessoes(segredo_da_sessao()[0])
     limitador = Limitador()
-    if agente.alertas is not None:
-        agente.alertas.avisar = None              # na web o alerta vai para a conversa e para o painel
+    estado = {"agente": agente, "config": config}   # trocados juntos quando a loja muda a configuração
+
+    def preparar(novo: Agente) -> Agente:
+        if novo.alertas is not None:
+            novo.alertas.avisar = None            # na web o alerta vai para a conversa e para o painel
+        return novo
+
+    preparar(agente)
+
+    def trocar_agente(nova: Config) -> None:
+        """Aplica a configuração na hora: monta outro agente; as conversas em andamento continuam."""
+        novo = preparar(montar_agente(nova))
+        with trava:
+            estado["agente"], estado["config"] = novo, nova
+
     memoria: dict[str, Conversa] = {}             # estado do agente por conversa (o histórico fica no banco)
     trava = threading.Lock()                       # protótipo de um processo: um turno por vez
 
@@ -82,10 +96,12 @@ def criar_app(agente: Agente | None = None, config: Config | None = None,
     tpl = Jinja2Templates(directory=PASTA / "templates")
     tpl.env.filters["formatar"] = formatar
     tpl.env.filters["origem"] = rotulo_origem
-    base = {"modelo": agente.llm.modelo, "demo": demo}
-
     def pagina(request: Request, arquivo: str, **ctx):
         usuario = getattr(request.state, "usuario", None)
+        ag = estado["agente"]
+        base = {"modelo": ag.llm.modelo, "demo": ag.llm.modelo.startswith("demo/"),
+                "assistente": (ag.persona.nome if ag.persona else "Lia"),
+                "artigo": (ag.persona.artigo if ag.persona else "a")}
         return tpl.TemplateResponse(request, arquivo, {"request": request, "usuario": usuario, **base, **ctx})
 
     # ---------------------------------------------------------------- login (SPEC-008)
@@ -160,7 +176,7 @@ def criar_app(agente: Agente | None = None, config: Config | None = None,
                 agente_conv.historico.append({"role": "user", "content": repo.mensagens(conv.id)[-1].texto})
                 agente_conv.turnos += 1
                 return conv.id
-            resp = agente.responder(agente_conv, texto)
+            resp = estado["agente"].responder(agente_conv, texto)
         if resp.origem:
             repo.atualizar(conv.id, origem=resp.origem)
         for a in resp.alertas:
@@ -264,7 +280,7 @@ def criar_app(agente: Agente | None = None, config: Config | None = None,
         return {"ativo": "simulador", "telefone": telefone, "conv": conv, "mensagens": msgs, "lado": "cliente",
                 "perguntas": PERGUNTAS, "origens": origem_lead.ORIGENS, "mensagem_canal": origem_lead.MENSAGEM_PADRAO,
                 "inicio": not any(m.autor == "cliente" for m in msgs), "url_thread": "/simulador/thread",
-                "data_referencia": config.data_referencia, **sessao_do_agente(conv.id if conv else "")}
+                "data_referencia": estado["config"].data_referencia, **sessao_do_agente(conv.id if conv else "")}
 
     def com_telefone(resposta, telefone: str):
         resposta.set_cookie(COOKIE_TELEFONE, telefone, httponly=True, samesite="lax")
@@ -302,4 +318,5 @@ def criar_app(agente: Agente | None = None, config: Config | None = None,
             memoria.pop(conv.id, None)
         return RedirectResponse("/simulador", status_code=303)
 
+    registrar_configuracoes(app, pagina, estado, repo, trocar_agente)
     return app

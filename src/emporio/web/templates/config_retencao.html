@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Retenção · Configurações{% endblock %}
+{% block content %}
+{% include "_config_nav.html" %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card card-body">
+      <h2 class="h6">Retomar o cliente que some na janela de 24 h (SPEC-002)</h2>
+      <p class="small">Quando o cliente para de responder, o agente avalia em cada marco se vale mandar um lembrete curto, esperar ou parar. Bloqueios em código, conferidos antes do modelo e de novo antes do envio:</p>
+      <table class="table table-sm small mb-2">
+        <tbody>
+          <tr><td>Avaliações depois de</td><td>{% for m in r.avaliacoes_min %}{{ (m // 60) ~ " h" if m >= 60 else m ~ " min" }}{% if not loop.last %}, {% endif %}{% endfor %} de silêncio</td></tr>
+          <tr><td>Lembretes por silêncio</td><td>no máximo {{ r.max_lembretes }}</td></tr>
+          <tr><td>Intervalo mínimo entre mensagens da loja</td><td>{{ r.intervalo_min }} min</td></tr>
+          <tr><td>Horário silencioso</td><td>{{ r.silencio_inicio }}h às {{ r.silencio_fim }}h (Campo Grande)</td></tr>
+          <tr><td>Última tentativa</td><td>quando faltam até {{ r.ultima_tentativa_h|int }} h para a janela fechar</td></tr>
+          <tr><td>Nada é enviado</td><td>nos últimos {{ r.margem_envio_min }} min da janela, depois de "pare" ou com um vendedor atendendo</td></tr>
+        </tbody>
+      </table>
+      <p class="small mb-0">Estado: {% if r.ativa %}<span class="badge status-lia">ligada</span>{% else %}<span class="badge text-bg-light">desligada (padrão)</span>{% endif %}</p>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <p class="small text-body-secondary">Os valores ficam no <code>.env</code> (<code>RETENCAO_*</code>) e a retenção liga com <code>RETENCAO_ATIVA=true</code> ou no <code>python -m emporio configurar</code>. Neste protótipo os lembretes são simulados no chat do terminal (<code>uv run python -m emporio chat --retencao</code>, comando <code>/esperar 1d</code>): o painel ainda não tem o agendador que mandaria as mensagens sozinho.</p>
+  </div>
+</div>
+{% endblock %}

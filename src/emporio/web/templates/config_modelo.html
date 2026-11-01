@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Modelo · Configurações{% endblock %}
+{% block content %}
+{% include "_config_nav.html" %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <form method="post" action="/configuracoes/modelo" class="card card-body">
+      <h2 class="h6">Modelo de linguagem (OpenRouter, sempre com Zero Data Retention)</h2>
+      {% for o in opcoes %}
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="modelo" id="m-{{ o.apelido }}" value="{{ o.apelido }}" {% if atual == o.slug %}checked{% endif %}>
+        <label class="form-check-label" for="m-{{ o.apelido }}"><strong>{{ o.nome }}</strong> <code class="small">{{ o.slug }}</code>
+          <div class="small text-body-secondary">{{ o.resumo }}</div></label>
+      </div>
+      {% endfor %}
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="radio" name="modelo" id="m-outro" value="outro" {% if outro %}checked{% endif %}>
+        <label class="form-check-label" for="m-outro">Outro modelo do OpenRouter</label>
+        <input class="form-control form-control-sm mt-1" name="outro" value="{{ outro }}" placeholder="provedor/modelo" aria-label="Slug do modelo">
+        <div class="small text-body-secondary">Só funciona se o modelo tiver endpoint ZDR com tools; o painel confere ao salvar.</div>
+      </div>
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" role="switch" id="raciocinio" name="raciocinio" {% if raciocinio %}checked{% endif %}>
+        <label class="form-check-label" for="raciocinio">Raciocínio estendido (recomendado: 126/126 nos evals, contra 116/126 sem ele)</label>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="data_referencia">Data de referência (relógio do agente)</label>
+        <input class="form-control w-auto" type="datetime-local" id="data_referencia" name="data_referencia" value="{{ data_referencia }}">
+        <div class="small text-body-secondary">Vazio = relógio real. Os pedidos dos dados são de out/2025 a mar/2026; os evals usam 25/03/2026 10:00.</div>
+      </div>
+      <div><button class="btn btn-primary">Salvar e aplicar</button></div>
+    </form>
+  </div>
+  <div class="col-lg-4">
+    <h2 class="h6">Provedor</h2>
+    <ul class="list-unstyled small">
+      <li>Modo: {% if provedor == "fake" %}<span class="badge text-bg-warning">demonstração (sem modelo)</span>{% else %}OpenRouter{% endif %}</li>
+      <li>Chave do OpenRouter: {% if chave %}<span class="text-success">configurada no .env</span>{% else %}<span class="text-danger">não configurada</span>{% endif %}</li>
+      <li>Modelo em uso: <code>{{ modelo }}</code></li>
+      <li>Toda chamada leva <code>provider.zdr = true</code>; nunca há nova tentativa sem ZDR.</li>
+    </ul>
+    <p class="small text-body-secondary">A chave fica só no <code>.env</code> e nunca aparece aqui. As escolhas desta tela vão para <code>.emporio.json</code>, o mesmo arquivo do <code>python -m emporio configurar</code>, e valem na próxima mensagem.</p>
+  </div>
+</div>
+{% endblock %}

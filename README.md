@@ -23,7 +23,7 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 - interface web no estilo de painel (FastAPI, Jinja2, Bootstrap e HTMX), com o chat no terminal para automação.
 
 **Como foi verificada:**
-- 278 testes automatizados, sem rede e sem chave;
+- 294 testes automatizados, sem rede e sem chave;
 - 42 cenários com o modelo real, 3 repetições cada: as 126 execuções passaram nos verificadores, sem falha crítica ([relatório](docs/avaliacao.md)). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não avaliam nuance de tom.
 
 **Além do pedido:** quatro protótipos do que um atendimento por WhatsApp precisaria em produção. São eles retenção do cliente na janela de 24 h, alerta sonoro para o vendedor, conexão do número da loja à Meta (login com Facebook e código por SMS) e origem do lead por canal. Ficam [numa seção própria](#funcionalidades-extras), desligados ou isolados por padrão.
@@ -48,12 +48,13 @@ O `uv run` usa o ambiente do projeto, então não é preciso ativá-lo.
 ```bash
 uv sync                                    # instala as dependências travadas (uv.lock)
 uv run python -m emporio ui --fake         # abre a interface no navegador, SEM chave e SEM modelo de linguagem
-uv run pytest                              # 278 testes, sem rede e sem chave (~16 s)
+uv run pytest                              # 294 testes, sem rede e sem chave (~18 s)
 ```
 
 A interface ([SPEC-006](docs/specs/SPEC-006-interface-web.md) e [SPEC-007](docs/specs/SPEC-007-atendimento-humano.md)) abre em `http://127.0.0.1:8000`, com duas abas:
 - **Simulador de WhatsApp:** você é o cliente, identificado pelo telefone. Tem um roteiro de perguntas com um clique, e cada resposta da Lia mostra as tools usadas (argumentos, resultado, tempo e custo).
 - **Atendimento:** o painel da loja. Lista as conversas e os alertas e abre o histórico de cada conversa. O vendedor pode assumir a conversa (a Lia pausa), responder e devolver à Lia.
+- **Configurações** ([SPEC-009](docs/specs/SPEC-009-configuracoes-no-painel.md)): modelo de linguagem (os 3 com ZDR), raciocínio e data de referência; persona do agente (nome, tom, emojis e instruções da loja, sem tocar nas regras invioláveis); conexão do WhatsApp passo a passo; links de origem dos leads; regras da retenção. Vale na próxima mensagem, sem reiniciar.
 
 O histórico fica em SQLite (`logs/atendimento.db`, fora do git), com telefone e e-mail mascarados.
 
@@ -217,7 +218,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes (`uv run pytest`, 278, sem rede):**
+**Testes (`uv run pytest`, 294, sem rede):**
 - **Unidade:** regras com valores escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; arrependimento no 7.º dia é elegível, no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a nova verificação ao trocar de pedido, a resposta segura e o payload com ZDR.
 

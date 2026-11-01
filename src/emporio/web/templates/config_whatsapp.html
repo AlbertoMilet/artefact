@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp · Configurações{% endblock %}
+{% block content %}
+{% include "_config_nav.html" %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="small">Modo:</span>
+  <a class="btn btn-sm {% if modo == 'simulado' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="/configuracoes/whatsapp">Simulado</a>
+  {% if real_disponivel %}
+  <a class="btn btn-sm {% if modo == 'real' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="/configuracoes/whatsapp?modo=real">Meta (real)</a>
+  {% else %}
+  <span class="small text-body-secondary">Para conectar de verdade, configure <code>META_APP_ID</code> e <code>META_APP_SECRET</code> no .env.</span>
+  {% endif %}
+</div>
+
+{% if ob %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <ol class="list-group list-group-numbered mb-3">
+      {% for etapa, rotulo in etapas %}
+      <li class="list-group-item d-flex align-items-center gap-2 {% if loop.index0 == indice %}active-step{% endif %}">
+        <span class="me-auto">{{ rotulo }}</span>
+        {% if loop.index0 < indice %}<span class="badge status-lia">feito</span>{% elif loop.index0 == indice %}<span class="badge text-bg-warning">agora</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+
+    <div class="card card-body">
+      {% set e = c.etapa.value %}
+      {% if precisa_login %}
+        <p class="mb-2">Entre com a conta do Facebook que administra o WhatsApp Business da loja.</p>
+        <form method="post" action="/configuracoes/whatsapp/login"><input type="hidden" name="modo" value="{{ modo }}">
+          <button class="btn btn-primary">Login com Facebook{% if modo == 'simulado' %} (simulado){% endif %}</button></form>
+        {% if modo == "real" %}<p class="small text-body-secondary mt-2">No app da Meta e no <code>META_REDIRECT_URI</code> do .env, use <code>{{ redirect_sugerido }}</code>.</p>{% endif %}
+      {% elif e == "autenticado" %}
+        <form method="post" action="/configuracoes/whatsapp/numero" class="mb-3"><input type="hidden" name="modo" value="{{ modo }}">
+          <label class="form-label" for="numero_id">Número da conta</label>
+          <div class="d-flex gap-2">
+            <select class="form-select" id="numero_id" name="numero_id">
+              {% for n in numeros %}<option value="{{ n.id }}">{{ n.exibicao }} · {{ n.nome_verificado }} [{{ n.verificacao or "?" }} / {{ n.status or "?" }}]</option>{% endfor %}
+            </select>
+            <button class="btn btn-primary">Usar este</button>
+          </div>
+        </form>
+        <form method="post" action="/configuracoes/whatsapp/numero"><input type="hidden" name="modo" value="{{ modo }}">
+          <label class="form-label">Ou cadastrar um número novo</label>
+          <div class="row g-2">
+            <div class="col-sm-5"><input class="form-control" name="numero" placeholder="(67) 99999-0000" aria-label="Número com DDD" required></div>
+            <div class="col-sm-5"><input class="form-control" name="nome" placeholder="Empório da Música" aria-label="Nome de exibição" required></div>
+            <div class="col-sm-2"><button class="btn btn-outline-primary w-100">Cadastrar</button></div>
+          </div>
+        </form>
+      {% elif e == "numero_escolhido" %}
+        <p class="mb-2">Enviar o código de confirmação para <strong>{{ c.numero_exibicao }}</strong>.</p>
+        <form method="post" action="/configuracoes/whatsapp/enviar-codigo" class="d-flex gap-2"><input type="hidden" name="modo" value="{{ modo }}">
+          <select class="form-select w-auto" name="metodo" aria-label="Como enviar"><option value="SMS">SMS</option><option value="VOICE">Ligação</option></select>
+          <button class="btn btn-primary">Enviar código</button></form>
+      {% elif e == "codigo_enviado" %}
+        {% if codigo_simulado %}<div class="alert alert-info py-2 small">Simulado: o SMS diria <strong>{{ codigo_simulado }}</strong>.</div>{% endif %}
+        <form method="post" action="/configuracoes/whatsapp/confirmar-codigo" class="d-flex gap-2 mb-2"><input type="hidden" name="modo" value="{{ modo }}">
+          <input class="form-control w-auto" name="codigo" inputmode="numeric" maxlength="7" placeholder="6 dígitos" aria-label="Código" required autocomplete="one-time-code">
+          <button class="btn btn-primary">Confirmar</button></form>
+        <form method="post" action="/configuracoes/whatsapp/enviar-codigo"><input type="hidden" name="modo" value="{{ modo }}">
+          <button class="btn btn-sm btn-outline-secondary">Reenviar código</button></form>
+      {% elif e == "verificado" %}
+        <form method="post" action="/configuracoes/whatsapp/registrar" class="d-flex gap-2"><input type="hidden" name="modo" value="{{ modo }}">
+          <input class="form-control w-auto" type="password" name="pin" inputmode="numeric" maxlength="6" placeholder="PIN de 6 dígitos" aria-label="PIN de duas etapas" required autocomplete="off">
+          <button class="btn btn-primary">Registrar número</button></form>
+        <p class="small text-body-secondary mt-2">O PIN de duas etapas vai só para a Meta; não é guardado.</p>
+      {% elif e == "registrado" %}
+        <form method="post" action="/configuracoes/whatsapp/assinar"><input type="hidden" name="modo" value="{{ modo }}">
+          <button class="btn btn-primary">Assinar o app na conta</button></form>
+      {% else %}
+        <p class="mb-1"><strong>Número registrado e app assinado.</strong></p>
+        <p class="small text-body-secondary mb-0">Para receber mensagens de clientes de verdade falta o webhook HTTPS público, fora do escopo do protótipo. Até lá, use o Simulador de WhatsApp.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <h2 class="h6">Conexão</h2>
+    <ul class="list-unstyled small">
+      <li>Etapa: <code>{{ c.etapa.value }}</code>{% if modo == "simulado" %} (simulado){% endif %}</li>
+      <li>Próxima ação: {{ proxima }}</li>
+      {% if c.numero_exibicao %}<li>Número: {{ c.numero_exibicao }}</li>{% endif %}
+      {% if c.waba_id %}<li>Conta WhatsApp Business: {{ c.waba_id }}</li>{% endif %}
+      <li>Token: {% if c.token_cifrado %}salvo cifrado{% elif not precisa_login %}em memória (sem <code>WHATSAPP_CHAVE_CIFRA</code>, some ao reiniciar){% else %}nenhum{% endif %}</li>
+    </ul>
+    {% if historico %}
+    <h2 class="h6">Histórico</h2>
+    <ul class="small text-body-secondary ps-3">{% for h in historico %}<li>{{ h }}</li>{% endfor %}</ul>
+    {% endif %}
+    <form method="post" action="/configuracoes/whatsapp/desconectar"><input type="hidden" name="modo" value="{{ modo }}">
+      <button class="btn btn-sm btn-outline-danger">Apagar conexão {{ modo }}</button></form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -10,7 +10,7 @@
       </div>
       <div class="d-flex flex-wrap gap-1 my-1">
         {% if c.aguardando_vendedor %}<span class="badge text-bg-warning">pediu vendedor</span>{% endif %}
-        {% if c.status == "vendedor" %}<span class="badge status-vendedor">com vendedor</span>{% else %}<span class="badge status-lia">com a Lia</span>{% endif %}
+        {% if c.status == "vendedor" %}<span class="badge status-vendedor">com vendedor</span>{% else %}<span class="badge status-lia">com {{ artigo }} {{ assistente }}</span>{% endif %}
         {% if c.origem %}<span class="badge canal">{{ c.origem|origem }}</span>{% endif %}
         <span class="badge text-bg-light">{{ c.total }} mensage{{ "m" if c.total == 1 else "ns" }}</span>
       </div>

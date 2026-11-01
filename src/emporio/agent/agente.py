@@ -93,9 +93,10 @@ def _mascarar_mensagem(m: dict) -> dict:
 class Agente:
     def __init__(self, llm: LLMClient, toolbox: Toolbox, max_tool_calls: int = 5,
                  timeout_turno_s: float = 30, janela_turnos: int = 10, retencao: Retencao | None = None,
-                 raciocinio: bool = True, alertas=None):
+                 raciocinio: bool = True, alertas=None, persona=None):
         self.llm = llm
         self.alertas = alertas             # CentralAlertas (SPEC-003) ou None
+        self.persona = persona             # Persona (SPEC-009) ou None = padrão
         self.raciocinio = raciocinio       # False: pede ao modelo para não usar raciocínio estendido
         self.retencao = retencao
         self.toolbox = toolbox
@@ -134,7 +135,7 @@ class Agente:
         if self.alertas is not None:      # pedido de vendedor alerta já na entrada, sem esperar o modelo
             pedidos = self.alertas.avaliar_pedido(conversa.id, texto_cliente, agora, origem=conversa.sessao.origem)
             self.alertas.emitir(pedidos)
-        system = {"role": "system", "content": montar_prompt(self.toolbox.relogio())}
+        system = {"role": "system", "content": montar_prompt(self.toolbox.relogio(), self.persona)}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
         resp = RespostaTurno(texto="", origem=origem_turno)

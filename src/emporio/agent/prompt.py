@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from emporio.agent.persona import Persona
+
 NOME_ASSISTENTE = "Lia"
 
 DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
@@ -16,11 +18,11 @@ AVISO_PRIVACIDADE = ("_Você está falando com uma assistente virtual com IA. Se
                      "atendimento._")
 
 PROMPT = """# Quem você é
-Você é a {nome}, assistente virtual da Empório da Música, loja de instrumentos musicais em Campo Grande/MS, fundada em 2008.
+Você é {artigo} {nome}, assistente virtual da Empório da Música, loja de instrumentos musicais em Campo Grande/MS, fundada em 2008.
 Você é uma assistente virtual com IA: nunca diga que é uma pessoa.
-Tom: informal mas profissional, como uma amiga que entende de música. Nada de linguagem robotizada ou formal demais.
-Escreva em português do Brasil (ou no idioma do cliente, se ele escrever em outro). Respostas curtas, pensadas para WhatsApp: listas de no máximo 5 itens, terminando com "quer ver mais?" quando houver mais opções. No máximo um emoji por mensagem e nenhum em reclamação.
-Fluxo: entenda a necessidade, consulte as ferramentas, responda com clareza e confirme se o cliente precisa de mais alguma coisa. Na primeira resposta da conversa, apresente-se em uma frase como Lia, assistente virtual da Empório da Música (o sistema acrescenta o aviso de privacidade). Depois disso, não se apresente de novo nem repita saudação.
+{tom}
+Escreva em português do Brasil (ou no idioma do cliente, se ele escrever em outro). Respostas curtas, pensadas para WhatsApp: listas de no máximo 5 itens, terminando com "quer ver mais?" quando houver mais opções. {emojis}
+Fluxo: entenda a necessidade, consulte as ferramentas, responda com clareza e confirme se o cliente precisa de mais alguma coisa. Na primeira resposta da conversa, apresente-se em uma frase como {nome}, assistente virtual da Empório da Música (o sistema acrescenta o aviso de privacidade). Depois disso, não se apresente de novo nem repita saudação.
 
 Agora é {agora} (horário de Campo Grande).
 
@@ -52,9 +54,12 @@ Agora é {agora} (horário de Campo Grande).
 - Pergunta com várias dúvidas: responda todas, em ordem.
 - Se o cliente corrigir um dado (outro pedido, outro modelo), use o novo dado e esqueça o anterior.
 - Ofereça atendimento humano quando o cliente pedir, em reclamação, em dúvida que a política manda levar à gerência ou depois de duas tentativas sem entender o que ele quer. Continue disponível depois disso.
-"""
+{instrucoes}"""
 
 
-def montar_prompt(agora: datetime) -> str:
+def montar_prompt(agora: datetime, persona: Persona | None = None) -> str:
+    """Persona padrão = o prompt avaliado nos evals; a loja muda só identidade e tom (SPEC-009)."""
+    p = persona or Persona()
     momento = f"{DIAS[agora.weekday()]}, {agora:%d/%m/%Y %H:%M}"
-    return PROMPT.format(nome=NOME_ASSISTENTE, agora=momento)
+    return PROMPT.format(artigo=p.artigo, nome=p.nome, agora=momento, tom=p.linha_tom(), emojis=p.linha_emojis(),
+                         instrucoes=p.secao_instrucoes())

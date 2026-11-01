@@ -20,6 +20,7 @@
       <div class="navbar-nav me-auto">
         <a class="nav-link {% if ativo == 'atendimento' %}active{% endif %}" href="/atendimento">Atendimento</a>
         <a class="nav-link {% if ativo == 'simulador' %}active{% endif %}" href="/simulador">Simulador de WhatsApp</a>
+        <a class="nav-link {% if ativo == 'configuracoes' %}active{% endif %}" href="/configuracoes">Configurações</a>
       </div>
       <span class="navbar-text small me-3 d-none d-md-inline">{% if demo %}modo demonstração · {% endif %}ZDR obrigatório · {{ usuario }}</span>
       <form method="post" action="/sair"><button class="btn btn-sm btn-outline-light">Sair</button></form>

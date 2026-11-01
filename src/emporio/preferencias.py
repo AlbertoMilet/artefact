@@ -15,7 +15,7 @@ from pathlib import Path
 
 from emporio import modelos
 
-CHAVES = {"modelo", "raciocinio", "retencao", "data_referencia", "alerta_sonoro"}
+CHAVES = {"modelo", "raciocinio", "retencao", "data_referencia", "alerta_sonoro", "persona"}
 
 
 def caminho() -> Path:
@@ -38,6 +38,9 @@ def validar(prefs: dict) -> dict:
         elif chave == "data_referencia":
             datetime.fromisoformat(str(valor))       # valida o formato
             out[chave] = str(valor)
+        elif chave == "persona":
+            from emporio.agent.persona import Persona
+            out[chave] = Persona.de_dict(valor if isinstance(valor, dict) else {}).como_dict()
     return out
 
 

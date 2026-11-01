@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Origem dos leads · Configurações{% endblock %}
+{% block content %}
+{% include "_config_nav.html" %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <form method="get" action="/configuracoes/origem" class="row g-2 mb-3">
+      <div class="col-sm-4"><label class="form-label small" for="numero">WhatsApp da loja</label>
+        <input class="form-control" id="numero" name="numero" value="{{ numero }}"></div>
+      <div class="col-sm-6"><label class="form-label small" for="mensagem">Mensagem pré-preenchida (sem o emoji)</label>
+        <input class="form-control" id="mensagem" name="mensagem" value="{{ mensagem }}" maxlength="200"></div>
+      <div class="col-sm-2 d-flex align-items-end"><button class="btn btn-outline-primary w-100">Gerar</button></div>
+    </form>
+    <div class="list-group">
+      {% for o, url in links %}
+      <div class="list-group-item">
+        <div class="d-flex justify-content-between gap-2"><strong>{{ o.marcador }} {{ o.nome }}</strong>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-copiar="{{ url }}">Copiar link</button></div>
+        <code class="small text-break">{{ url }}</code>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="small text-body-secondary mt-2">Use cada link só no seu canal. O agente reconhece o emoji no fim da primeira mensagem e o tira antes do modelo; se o cliente apagar o emoji, a origem fica desconhecida.</p>
+  </div>
+  <div class="col-lg-4">
+    <h2 class="h6">Conversas por origem ({{ total }})</h2>
+    <table class="table table-sm small">
+      <tbody>
+        {% for o, n, pct in linhas %}
+        <tr><td>{% if o %}{{ o.marcador }} {{ o.nome }}{% else %}Desconhecida{% endif %}</td><td class="text-end">{{ n }}</td><td class="text-end text-body-secondary">{{ "%.0f"|format(pct * 100) }}%</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll("[data-copiar]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copiar); b.textContent = "Copiado"; } catch { b.textContent = "Copie à mão"; }
+  }));
+</script>
+{% endblock %}
