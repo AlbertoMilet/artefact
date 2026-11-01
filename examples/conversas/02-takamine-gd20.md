@@ -22,11 +22,9 @@ buscar_produtos({"texto":"Takamine GD20","so_disponiveis":false})
 
 **Lia:** Oi! Eu sou a Lia, assistente virtual da Empório da Música 😊  
   
-O Takamine GD20 Dreadnought Natural está disponível:  
-  
+O Takamine GD20 Dreadnought Natural está disponível (5 unidades em estoque):  
 - Preço: R$ 2.199,00  
 - No PIX: R$ 2.089,05  
-- Estoque: 5 unidades  
   
 Quer que eu veja o parcelamento no cartão ou mais detalhes dele?  
   
@@ -39,20 +37,20 @@ _Você está falando com uma assistente virtual com IA. Seus dados são usados s
 <details><summary>Ferramentas chamadas: <code>buscar_produtos</code></summary>
 
 ```text
-buscar_produtos({"marca":"Takamine","texto":"Takamine elétrico eletroacústico"})
-  -> {"resultados": [], "total": 0, "alternativas_semelhantes": [{"produto_id": 115, "nome": "Takamine GC1CE Elétrico Nylon Natural", "marca": "Takamine", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 2.499,00", "preco_pix": "R$ 2.374,05", "estoque": 5}, {"produto_id": 100, "nome": "Takamine GC5CE Elétrico Nylon Natural", "marca": "Takamine", "categoria": "Violões", "disp…
+buscar_produtos({"marca":"Takamine","texto":"Takamine elétrico"})
+  -> {"resultados": [{"produto_id": 115, "nome": "Takamine GC1CE Elétrico Nylon Natural", "marca": "Takamine", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 2.499,00", "preco_pix": "R$ 2.374,05", "estoque": 5}, {"produto_id": 100, "nome": "Takamine GC5CE Elétrico Nylon Natural", "marca": "Takamine", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": …
 
 ```
 
 </details>
 
-**Lia:** Não achei um "Takamine elétrico" exatamente com esse nome, mas tenho estas opções eletroacústicas da Takamine:  
+**Lia:** Temos sim! Takamine com captador (elétricos):  
   
-- Takamine GC1CE Elétrico Nylon Natural — R$ 2.499,00 (PIX R$ 2.374,05)  
-- Takamine GC5CE Elétrico Nylon Natural — R$ 3.299,00 (PIX R$ 3.134,05)  
-- Takamine GN51CE Elétrico Aço Natural — R$ 4.199,00 (PIX R$ 3.989,05)  
+1. Takamine GC1CE Elétrico Nylon Natural — R$ 2.499,00 (PIX R$ 2.374,05)  
+2. Takamine GC5CE Elétrico Nylon Natural — R$ 3.299,00 (PIX R$ 3.134,05)  
+3. Takamine GN51CE Elétrico Aço Natural — R$ 4.199,00 (PIX R$ 3.989,05)  
   
-Quer ver mais detalhes de algum deles?
+Todos disponíveis em estoque. Quer detalhes de algum deles?
 
 ---
 
@@ -71,16 +69,15 @@ detalhar_produto({"produto_id":115})
 **Lia:** Takamine GC1CE Elétrico Nylon Natural:  
   
 - Preço: R$ 2.499,00 | PIX: R$ 2.374,05  
-- Estoque: 5 unidades  
 - Tampo: Spruce sólido | Laterais e fundo: Sapele | Braço: Mogno  
 - Cordas: nylon | Escala: 650mm | Cor: Natural  
 - Eletrônica: sim, pré-amp TP-4T  
-- Descrição: violão eletroacústico clássico com som natural, ótimo para apresentações ao vivo  
+- Violão eletroacústico clássico, ótimo pra apresentações ao vivo com som natural  
+- Estoque: 5 unidades  
+- Cartão: até 12x de R$ 208,25 (sem juros, total R$ 2.499,00)  
   
-No cartão: até 12x de R$ 208,25, sem juros (total R$ 2.499,00).  
-  
-Quer que eu veja mais alguma coisa?
+Quer que eu calcule o frete ou te ajude com mais alguma coisa?
 
 ---
 
-_Custo da conversa: US$ 0.00073._
+_Custo da conversa: US$ 0.00070._

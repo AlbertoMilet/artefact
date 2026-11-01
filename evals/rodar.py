@@ -16,6 +16,7 @@ from pathlib import Path
 
 from emporio.config import MODELO_PADRAO, RAIZ, Config
 from evals.casos import CASOS, Caso
+from emporio.rules.verificacao import mascarar_texto
 from evals.nucleo import Resultado, rodar_caso
 
 
@@ -59,8 +60,9 @@ def relatorio(resultados: list[Resultado], modelo: str, duracao_s: float) -> str
         linhas += ["", "## Conversas que falharam", ""]
         for r in falhos:
             linhas += [f"### `{r.caso.id}`", ""]
-            for turno, resp in zip(r.caso.turnos, r.respostas):
-                linhas += [f"**Cliente:** {turno}", "", "**Lia:** " + resp.replace("\n", "\n> "), ""]
+            for turno, resp in zip(r.caso.turnos, r.respostas):     # respostas já mascaradas
+                linhas += [f"**Cliente:** {mascarar_texto(turno)}", "",
+                           "**Lia:** " + mascarar_texto(resp).replace("\n", "\n> "), ""]
     return "\n".join(linhas) + "\n"
 
 
@@ -87,7 +89,7 @@ def main() -> int:
     a.saida.write_text(relatorio(resultados, a.modelo, time.perf_counter() - t0), encoding="utf-8")
     ok = sum(r.passou for r in resultados)
     print(f"\n{ok}/{len(resultados)} aprovados; {sum(bool(r.criticas) for r in resultados)} com falha crítica -> {a.saida}")
-    return 0
+    return 0 if ok == len(resultados) else 1
 
 
 if __name__ == "__main__":

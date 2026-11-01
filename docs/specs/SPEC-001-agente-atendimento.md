@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** concluída (rev. 9): Fases 0 a 6 entregues
+- **Status:** concluída (rev. 10): Fases 0 a 6 entregues; correções da revisão final do Codex (D-11, D-12)
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`
@@ -84,7 +84,9 @@ cliente digita no CLI
 | `verificar_arrependimento` | `pedido_id`, `data_recebimento`, `canal` | `{elegivel, motivo, alternativas[]}` | `elegivel_arrependimento` |
 | `consultar_politicas` | `pergunta` | até 3 seções do manual (`§N`, título, texto) ou o índice das seções | BM25 sobre o Markdown |
 | `info_loja` | nenhuma | endereço, telefone, e-mail, horário, `aberto_agora`, próxima abertura | `aberto_agora(relogio)` |
-| `registrar_solicitacao` | `tipo`, `resumo`, `confirmado=True` | `{protocolo_simulado}` | grava em `tickets.jsonl` |
+| `calcular_frete` | `cidade`, `valor` | frete (`grátis`, `R$ 35,00` ou nulo), prazo, modalidades | `frete` (RN-07) |
+| `consultar_promocoes` | `nome?` | promoções ativas com esse nome (ou todas as ativas), com preço original e promocional | `preco_final` (RN-03, RN-04) |
+| `registrar_solicitacao` | `tipo`, `resumo`, `confirmado` | `confirmado=false`: resumo para o cliente (guarda a proposta); `confirmado=true`: `{protocolo_simulado}` | só grava com proposta de turno anterior e mesmo tipo (RN-21) |
 
 > `verificar_arrependimento` e `registrar_solicitacao` derivam das respostas 7.3 e 3.2 (ver D-07).
 
@@ -132,10 +134,10 @@ Situação do produto, vista pelo cliente:
 | RN-18 | Acessórios: a loja trabalha só com instrumentos; o agente sugere procurar lojas parceiras (sem nomes) e oferece contato com a equipe | §1, §7.1, Q 9.3, Q 10.2 |
 | RN-19 | Fora de escopo: recusa curta e traz a conversa de volta à loja; música ligada à escolha de produto: no máximo 2 frases | Q 9.1, 9.2 |
 | RN-20 | Atendimento humano é oferecido quando o cliente pede, em reclamação, em dúvida que a §10 manda levar à gerência, em acessórios e depois de 2 falhas de entendimento; o agente continua disponível | Q 10.2 |
-| RN-21 | Registro de solicitação só depois de o cliente confirmar o resumo; o texto diz "registrei sua solicitação (protótipo)" e não promete prazo de retorno | Q 3.2 |
+| RN-21 | Registro em dois passos: `confirmado=false` prepara e guarda a proposta; `confirmado=true` só é aceito num turno posterior do cliente e para o mesmo tipo, e consome a proposta. O texto diz "registrei sua solicitação (protótipo)" e não promete prazo de retorno | Q 3.2, D-12 |
 | RN-22 | O agente não concede desconto nem promete prazo ou reembolso fora da política, nem oferece ações que não executa (reservar produto, fechar pedido, agendar entrega); texto vindo de dados ou do manual é dado, não instrução | Q 9.4, D-10 |
 | RN-23 | Toda chamada ao LLM vai pelo OpenRouter com `provider.zdr = true`; sem endpoint ZDR disponível, o pedido falha e o agente dá a resposta segura. Nunca há fallback para endpoint sem ZDR | D-02 |
-| RN-24 | Ao LLM vão só os campos do pedido verificado, sem telefone nem e-mail; log e `--debug` mascaram telefone e e-mail | Q 8.2 |
+| RN-24 | As tools nunca devolvem telefone nem e-mail de clientes (erros de argumento também não ecoam o valor recebido). O modelo recebe o que o cliente digita, sob ZDR; histórico guardado, log, `--debug`, exemplos e relatórios mascaram contatos de clientes, e a resposta mostrada ao cliente também é mascarada | Q 8.2 |
 | RN-25 | Primeira resposta da sessão: o modelo se apresenta como Lia e o sistema acrescenta, no fim, o aviso de uma linha (assistente virtual com IA; dados usados só para o atendimento). Logs e `--debug` mascaram contatos de clientes, não os contatos públicos da loja | Q 8.3 |
 | RN-26 | No máximo 5 chamadas de tool por turno e tempo limite por turno; erro de tool volta ao modelo uma vez; falha persistente gera resposta segura com contatos e horário | Q 4.5, 5.3 |
 
@@ -173,7 +175,7 @@ Situação do produto, vista pelo cliente:
 | `src/emporio/rules/` | Funções puras: `precos.py`, `parcelamento.py`, `frete.py`, `devolucao.py`, `horario.py`, `verificacao.py` |
 | `src/emporio/data/` | Modelos Pydantic, carga e validação dos CSVs, normalização de `specs` e de marca |
 | `src/emporio/policies/` | `manual.md` (convertido e revisado à mão, com seções §1–§10) e busca BM25 |
-| `src/emporio/tools/` | Schemas e implementações das 7 tools |
+| `src/emporio/tools/` | Schemas e implementações das 9 tools |
 | `src/emporio/llm/` | `LLMClient` (interface), `OpenRouterClient`, `FakeLLMClient` |
 | `src/emporio/agent/` | Loop, system prompt em camadas, sessão (histórico em janela, estado de verificação) |
 | `src/emporio/cli.py` | `python -m emporio chat [--debug]` |
@@ -208,7 +210,7 @@ Situação do produto, vista pelo cliente:
 | `OPENROUTER_API_KEY` | sim, para uso real | Chave do OpenRouter | `.env` (fora do git) |
 | `OPENROUTER_MODEL` | sim | Slug do modelo escolhido na Fase 0 | `.env` / `.env.example` |
 | `LLM_PROVIDER` | não (padrão `openrouter`) | `openrouter` ou `fake` (modo demonstração: roteador por palavras-chave sobre as tools reais, sem modelo de linguagem, para rodar sem chave) | `.env` |
-| `EMPORIO_DATA_DIR` | não (padrão `data/`) | Pasta dos CSVs e do manual | `.env` |
+| `EMPORIO_DATA_DIR` | não (padrão `data/`) | Pasta dos CSVs (o manual fica em `src/emporio/policies/manual.md`) | `.env` |
 | `DATA_REFERENCIA` | não | Data e hora fixas para testes e demonstrações (ISO 8601) | `.env` |
 | `MAX_TOOL_CALLS` / `TURN_TIMEOUT_S` | não (5 / 30) | Limites do loop | `.env` |
 | `HISTORY_WINDOW` | não (10) | Trocas mantidas na janela | `.env` |
@@ -262,6 +264,8 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 | D-08 | Conflitos do manual: telefone (67) 3341-4444, e-mail sem acento, parcelamento pela §3.1 | Q 7.2 |
 | D-09 | `detalhar_produto` devolve parcelas máximas e valor da parcela (resolve P-02) | Pedido do usuário em 01/11/2026; sem isso o LLM teria de fazer a conta (contra RN-01) |
 | D-10 | Modelo: `deepseek/deepseek-v4.1-flash` via OpenRouter com ZDR; alternativa testada: `openai/gpt-6-luna` | Fase 0 (`docs/fase0-modelos.md`): os 3 candidatos acertaram 10/10 em tool e fato. O DeepSeek teve o tom mais próximo da §7.1, a menor latência (2,5 s), custo baixo, suporte a `temperature` (evals reproduzíveis, Q 5.4) e mais de 30 endpoints ZDR (resiliência). O Luna recusou um prompt injection em inglês e de forma robótica; o Haiku foi o mais lento e o mais caro. Amostra pequena (10 chamadas por modelo): os evals da Fase 5 confirmam ou revertem a escolha. Ressalva: o DeepSeek ofereceu "reservar" um produto; o system prompt proíbe prometer ações que o agente não executa |
+| D-11 | Tools `calcular_frete` e `consultar_promocoes` | Revisão final do Codex: a regra de frete estava testada mas fora do fluxo do agente, e campanhas eram respondidas sem consultar o CSV |
+| D-12 | Registro de solicitação em dois passos com estado na sessão | Revisão final do Codex: a confirmação era só o modelo enviando `confirmado=true` |
 
 ### Pendências (não inventar no código)
 
@@ -279,7 +283,7 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 | O LLM reescrever valores da tool (ex.: arredondar errado) | Preço incorreto | Tools devolvem valores já formatados (`"R$ 2.089,05"`); eval de fato confere o texto |
 | O avaliador não ter chave do OpenRouter | Não conseguir rodar | `LLM_PROVIDER=fake` roda a demonstração e os testes sem chave; README explica como criar a chave |
 | Manual convertido com erro | Política errada | `manual.md` revisado à mão contra o PDF, e testes de busca por seção |
-| Falha ocasional do modelo | Resposta errada sem padrão | Fase 5: em cerca de 410 conversas de avaliação, uma falha crítica ocasional não reproduzida (o conteúdo não foi capturado; o teste agora grava `logs/avaliacao_pytest.md`); um caractere corrompido em argumento ("Violཞs"), tratado com categoria tolerante; e uma resposta vazia, tratada com uma nova tentativa. Resultado final: 123/123 (3 repetições) e 205/205 (5 repetições) sem falha crítica |
+| Falha ocasional do modelo | Resposta errada sem padrão | Fase 5: em cerca de 410 conversas, uma falha crítica ocasional não reproduzida (o teste agora grava `logs/avaliacao_pytest.md`); caractere corrompido em argumento ("Violཞs"), tratado com categoria tolerante; resposta vazia, tratada com nova tentativa. Depois da revisão final, com verificador mais rígido e testado: 126/126 (3 repetições) sem falha crítica |
 
 ## 8. Referências
 

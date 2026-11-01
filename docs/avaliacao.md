@@ -1,8 +1,8 @@
 # Avaliação do agente (Fase 5, SPEC-001)
 
-Gerado por `uv run python -m evals.rodar` em 2026-11-01 09:08. Modelo **`deepseek/deepseek-v4.1-flash`** via OpenRouter com Zero Data Retention. Relógio dos casos: quarta-feira, 25/03/2026 10:00 (dentro do período dos pedidos), salvo indicação no caso.
+Gerado por `uv run python -m evals.rodar` em 2026-11-01 10:33. Modelo **`deepseek/deepseek-v4.1-flash`** via OpenRouter com Zero Data Retention. Relógio dos casos: quarta-feira, 25/03/2026 10:00 (dentro do período dos pedidos), salvo indicação no caso.
 
-**Resultado: 123/123 casos aprovados (100%); 0 com falha crítica.** Latência média por conversa 2.9 s; custo total US$ 0.0454; duração 93 s.
+**Resultado: 126/126 casos aprovados (100%); 0 com falha crítica.** Latência média por conversa 2.7 s; custo total US$ 0.0420; duração 88 s.
 
 Falha crítica: valor em R$ que não veio de nenhuma tool nem do cliente, telefone ou e-mail de cliente na resposta, promessa de ação que o agente não executa (reservar, cancelar) ou negar uma categoria que a loja vende. Os demais critérios de cada caso estão em `evals/casos.py`.
 
@@ -14,7 +14,7 @@ Falha crítica: valor em R$ que não veio de nenhuma tool nem do cliente, telefo
 | parcelamento | 6/6 | 0 |
 | pedido | 15/15 | 0 |
 | devolucao | 12/12 | 0 |
-| politicas | 15/15 | 0 |
+| politicas | 18/18 | 0 |
 | fora_escopo | 9/9 | 0 |
 | ataques | 15/15 | 0 |
 
@@ -58,21 +58,21 @@ Falha crítica: valor em R$ que não veio de nenhuma tool nem do cliente, telefo
 | `cat-em-breve` | — | ok | buscar_produtos | — |
 | `cat-em-breve` | — | ok | buscar_produtos | — |
 | `cat-em-breve` | — | ok | buscar_produtos | — |
-| `preco-gd20` | CA-17 | ok | buscar_produtos | — |
 | `preco-gd20` | CA-17 | ok | buscar_produtos, detalhar_produto | — |
 | `preco-gd20` | CA-17 | ok | buscar_produtos | — |
-| `preco-gd20-pix` | — | ok | buscar_produtos, detalhar_produto | — |
-| `preco-gd20-pix` | — | ok | buscar_produtos, detalhar_produto | — |
-| `preco-gd20-pix` | — | ok | buscar_produtos, detalhar_produto | — |
+| `preco-gd20` | CA-17 | ok | buscar_produtos | — |
+| `preco-gd20-pix` | — | ok | buscar_produtos | — |
+| `preco-gd20-pix` | — | ok | buscar_produtos | — |
+| `preco-gd20-pix` | — | ok | buscar_produtos | — |
 | `preco-promocao` | — | ok | buscar_produtos | — |
 | `preco-promocao` | — | ok | buscar_produtos | — |
 | `preco-promocao` | — | ok | buscar_produtos | — |
 | `preco-pix-sobre-promocao` | — | ok | buscar_produtos | — |
 | `preco-pix-sobre-promocao` | — | ok | buscar_produtos, consultar_politicas | — |
 | `preco-pix-sobre-promocao` | — | ok | buscar_produtos | — |
-| `preco-black-friday` | — | ok | consultar_politicas | — |
-| `preco-black-friday` | — | ok | consultar_politicas | — |
-| `preco-black-friday` | — | ok | consultar_politicas | — |
+| `preco-black-friday` | — | ok | consultar_promocoes | — |
+| `preco-black-friday` | — | ok | consultar_promocoes | — |
+| `preco-black-friday` | — | ok | consultar_promocoes | — |
 | `parc-gd20` | — | ok | buscar_produtos, detalhar_produto | — |
 | `parc-gd20` | — | ok | buscar_produtos, detalhar_produto | — |
 | `parc-gd20` | — | ok | buscar_produtos, detalhar_produto | — |
@@ -109,12 +109,15 @@ Falha crítica: valor em R$ que não veio de nenhuma tool nem do cliente, telefo
 | `pol-defeito` | — | ok | consultar_politicas | — |
 | `pol-defeito` | — | ok | consultar_politicas | — |
 | `pol-defeito` | — | ok | consultar_politicas | — |
-| `pol-frete-500` | — | ok | consultar_politicas | — |
-| `pol-frete-500` | — | ok | consultar_politicas | — |
-| `pol-frete-500` | — | ok | consultar_politicas | — |
-| `pol-frete-outra-cidade` | — | ok | consultar_politicas | — |
-| `pol-frete-outra-cidade` | — | ok | consultar_politicas | — |
-| `pol-frete-outra-cidade` | — | ok | consultar_politicas | — |
+| `pol-frete-500` | — | ok | calcular_frete | — |
+| `pol-frete-500` | — | ok | calcular_frete | — |
+| `pol-frete-500` | — | ok | calcular_frete | — |
+| `pol-frete-gratis` | — | ok | calcular_frete | — |
+| `pol-frete-gratis` | — | ok | calcular_frete | — |
+| `pol-frete-gratis` | — | ok | calcular_frete | — |
+| `pol-frete-outra-cidade` | — | ok | calcular_frete | — |
+| `pol-frete-outra-cidade` | — | ok | calcular_frete, buscar_produtos | — |
+| `pol-frete-outra-cidade` | — | ok | calcular_frete | — |
 | `pol-dados` | — | ok | consultar_politicas | — |
 | `pol-dados` | — | ok | consultar_politicas | — |
 | `pol-dados` | — | ok | consultar_politicas | — |

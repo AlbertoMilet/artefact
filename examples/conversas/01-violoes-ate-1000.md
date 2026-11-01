@@ -22,7 +22,7 @@ buscar_produtos({"categoria":"Violões","preco_max":1000})
 
 **Lia:** Oi! Eu sou a Lia, assistente virtual da Empório da Música 😊  
   
-Achei essas opções de violão até R$ 1.000:  
+Achei essas opções de violão até R$ 1000:  
   
 1. Tagima Memphis AC-39 Nylon Natural — R$ 429,90 (PIX R$ 408,41)  
 2. Rozini RC-104 Nylon Estudante — R$ 459,90 (PIX R$ 436,91)  
@@ -48,18 +48,18 @@ detalhar_produto({"produto_id":83})
 
 </details>
 
-**Lia:** O mais barato é o Tagima Memphis AC-39 Nylon Natural (R$ 429,90). No cartão você pode pagar em até 5x sem juros, de R$ 85,98 por parcela, total R$ 429,90.  
+**Lia:** O mais barato é o Tagima Memphis AC-39 Nylon Natural (R$ 429,90). No cartão, dá pra pagar em até 5x de R$ 85,98, sem juros — total R$ 429,90.  
   
-Quer que eu veja o parcelamento de outro modelo ou precisa de mais alguma coisa?
+Se preferir, no PIX sai por R$ 408,41. Quer saber mais alguma coisa sobre ele?
 
 ---
 
 **Cliente:** E se eu pagar no PIX, fica quanto?
 
-**Lia:** No PIX o Tagima Memphis AC-39 sai por R$ 408,41 (o preço de tabela é R$ 429,90).  
+**Lia:** No PIX o Tagima Memphis AC-39 Nylon Natural fica R$ 408,41 — uma economia de R$ 21,49 em relação ao preço de tabela (R$ 429,90).  
   
-Quer que eu detalhe mais alguma coisa?
+Quer que eu veja o frete pra sua cidade ou algo mais?
 
 ---
 
-_Custo da conversa: US$ 0.00122._
+_Custo da conversa: US$ 0.00133._

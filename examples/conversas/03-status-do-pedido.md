@@ -10,9 +10,9 @@
 
 **Cliente:** Oi, queria saber do meu pedido 8
 
-**Lia:** Oi! Eu sou a Lia, assistente virtual da Empório da Música 😊  
+**Lia:** Oi! Eu sou a Lia, assistente virtual da Empório da Música. 😊  
   
-Claro, posso consultar o pedido 8 pra você. Só preciso confirmar o telefone ou e-mail que está no cadastro da compra. Pode me passar?  
+Claro, posso consultar o pedido 8 pra você. Só preciso de uma confirmação: me passa o telefone ou o e-mail que você usou no cadastro da compra?  
   
 _Você está falando com uma assistente virtual com IA. Seus dados são usados só para este atendimento._
 
@@ -23,16 +23,16 @@ _Você está falando com uma assistente virtual com IA. Seus dados são usados s
 <details><summary>Ferramentas chamadas: <code>consultar_pedido</code></summary>
 
 ```text
-consultar_pedido({"pedido_id":8,"verificacao":"(67) 9****-1098"})
+consultar_pedido({"pedido_id": 8, "verificacao": " (67) 9****-1098"})
   -> {"autorizado": false, "mensagem": "Não foi possível confirmar o pedido com os dados informados. Peça ao cliente para conferir o número do pedido e o telefone ou e-mail do cadastro."}
 
 ```
 
 </details>
 
-**Lia:** Hmm, não consegui confirmar o pedido 8 com esse telefone. 🤔  
+**Lia:** Não consegui confirmar o pedido 8 com esses dados. 🤔  
   
-Pode conferir pra mim o número do pedido e o telefone (ou e-mail) usado no cadastro? Às vezes é um dígito diferente ou o e-mail em vez do celular.
+Pode conferir pra mim o número do pedido e o telefone ou e-mail usado no cadastro? Às vezes o telefone cadastrado é outro (fixo, por exemplo) ou o e-mail ajuda a localizar.
 
 ---
 
@@ -41,24 +41,24 @@ Pode conferir pra mim o número do pedido e o telefone (ou e-mail) usado no cada
 <details><summary>Ferramentas chamadas: <code>consultar_pedido</code></summary>
 
 ```text
-consultar_pedido({"pedido_id":8,"verificacao":"a***@coldmail.com"})
+consultar_pedido({"pedido_id": 8, "verificacao": "a***@coldmail.com"})
   -> {"autorizado": true, "pedido_id": 8, "cliente_primeiro_nome": "Ana", "status": "enviado", "data_pedido": "15/02/2026", "total_registrado": "R$ 349,90", "forma_pagamento": "cartão de débito", "codigo_rastreio": "BRJL5544332BR", "previsao_entrega_original": "28/02/2026", "observacao": null, "itens": [{"produto": "Kala KA-C Concert Mogno", "quantidade": 1}], "nota": "valores como registrados no pedid…
 
 ```
 
 </details>
 
-**Lia:** Achei aqui, Ana! Segue o resumo do pedido 8:  
+**Lia:** Achei seu pedido, Ana! Aqui está:  
   
-- Status: enviado  
-- Data do pedido: 15/02/2026  
+📦 **Pedido 8** — feito em 15/02/2026  
 - Item: Kala KA-C Concert Mogno (1 unidade)  
 - Total registrado: R$ 349,90  
-- Forma de pagamento: cartão de débito  
+- Pagamento: cartão de débito  
+- Status: **enviado**  
 - Código de rastreio: BRJL5544332BR  
-- Previsão de entrega original: 28/02/2026  
+- Previsão de entrega feita na compra: 28/02/2026  
   
-Quer que eu te ajude com mais alguma coisa?
+Vale lembrar que essa previsão é a que foi registrada na época da compra. Quer que eu te ajude com mais alguma coisa?
 
 ---
 
@@ -67,17 +67,17 @@ Quer que eu te ajude com mais alguma coisa?
 <details><summary>Ferramentas chamadas: <code>consultar_politicas</code></summary>
 
 ```text
-consultar_politicas({"pergunta":"Pedido atrasado, passou da previsão de entrega. O que fazer? Política de prazo de entrega e atraso."})
-  -> {"trechos": [{"secao": "§5.1", "titulo": "Entregas na Região Metropolitana de Campo Grande (Política de Frete e Entregas)", "texto": "- Frete grátis para pedidos acima de R$ 500,00.\n- Para pedidos abaixo de R$ 500,00, taxa fixa de R$ 35,00.\n- Prazo de entrega: 1 a 3 dias úteis.\n- Entrega realizada por motoboy próprio. O cliente será contactado por telefone antes da entrega."}, {"secao": "§5.2",…
+consultar_politicas({"pergunta": "Pedido enviado com previsão de entrega vencida, atraso na entrega, o que fazer"})
+  -> {"trechos": [{"secao": "§5.1", "titulo": "Entregas na Região Metropolitana de Campo Grande (Política de Frete e Entregas)", "texto": "- Frete grátis para pedidos acima de R$ 500,00.\n- Para pedidos abaixo de R$ 500,00, taxa fixa de R$ 35,00.\n- Prazo de entrega: 1 a 3 dias úteis.\n- Entrega realizada por motoboy próprio. O cliente será contactado por telefone antes da entrega."}, {"secao": "§5.3",…
 
 ```
 
 </details>
 
-**Lia:** Entendi, Ana. Como o pedido está com status "enviado" e já passou da previsão, o primeiro passo é acompanhar o rastreio: o código **BRJL5544332BR** pode ser consultado direto no site dos Correios ou da Jadlog, com o detalhamento de onde a encomenda está agora.  
+**Lia:** Entendi, Ana. Como o pedido já está com status **enviado**, o primeiro passo é acompanhar o rastreio: você pode consultar o código **BRJL5544332BR** direto no site dos Correios ou da Jadlog, pra ver onde a encomenda está.  
   
-Aqui pelo chat eu não consigo ver a movimentação detalhada nem alterar nada no envio, mas posso registrar uma solicitação pra equipe verificar o atraso junto à transportadora e falar com você. Quer que eu faça isso?
+Se o rastreio não avançar ou você precisar de ajuda com esse atraso, posso registrar uma solicitação pra nossa equipe te dar um retorno. Quer que eu faça isso?
 
 ---
 
-_Custo da conversa: US$ 0.00147._
+_Custo da conversa: US$ 0.00091._
