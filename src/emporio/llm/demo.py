@@ -15,6 +15,13 @@ from emporio.llm.base import RespostaLLM
 from emporio.llm.fake import chamar, responder
 
 AVISO = "_(modo demonstração, sem modelo de linguagem)_"
+# Palavras da pergunta que não descrevem o produto ("quais opções de violões disponíveis custando...")
+PALAVRAS_DE_PERGUNTA = set("""
+a o as os um uma uns umas de da do das dos e em no na nos nas para pra por com que qual quais quanto quanta
+quantos quantas custa custam custando sai saem preco precos valor valores tem tens tenho temos voces voce vcs
+me mostre mostra mostrar ver quero queria gostaria procuro procurando opcao opcoes modelo modelos disponivel
+disponiveis estoque algum alguma alguns algumas oi ola bom boa dia tarde noite favor por favor
+""".split())
 
 
 def _ultima_do_usuario(mensagens: list[dict]) -> str:
@@ -35,7 +42,8 @@ def _rotear(texto: str) -> RespostaLLM:
                             "pix", "boleto", "promoc", "dados", "corda", "palheta", "acessorio", "amplificador")):
         return chamar("consultar_politicas", pergunta=texto)
     preco = re.search(r"(?:ate|abaixo de|menos de)\s*r?\$?\s*([\d.]+)", t)
-    args: dict = {"texto": re.sub(r"(?:ate|abaixo de|menos de)\s*r?\$?\s*[\d.]+", "", t).strip() or None}
+    resto = re.sub(r"(?:ate|abaixo de|menos de)\s*r?\$?\s*[\d.]+", "", t)
+    args: dict = {"texto": " ".join(w for w in resto.split() if w not in PALAVRAS_DE_PERGUNTA) or None}
     if preco:
         args["preco_max"] = float(preco.group(1).replace(".", ""))
     return chamar("buscar_produtos", **{k: v for k, v in args.items() if v is not None})

@@ -49,3 +49,15 @@ def test_sem_chave_orienta_o_modo_demonstracao(monkeypatch, capsys):
     monkeypatch.setattr("emporio.config.load_dotenv", lambda *a, **k: None)
     assert cli.main(["chat", "-m", "oi"]) == 2
     assert "--fake" in capsys.readouterr().err
+
+
+def test_demo_entende_pergunta_com_palavras_de_pergunta(capsys):
+    cli.main(["chat", "--fake", "-m", "Quais opções de violões disponíveis custando até R$1000?"])
+    out = capsys.readouterr().out
+    assert "Encontrei:" in out and "Yamaha C40" in out and "Takamine GD20" not in out
+
+
+def test_recuo_deixa_uma_coluna_livre():
+    from emporio.visual import RECUO, recuar
+    linhas = recuar("palavra " * 40, largura=60).split("\n")
+    assert all(len(l) <= 59 for l in linhas) and all(l.startswith(RECUO) for l in linhas[1:])

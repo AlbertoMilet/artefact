@@ -114,7 +114,7 @@ def recuar(texto: str, largura: int | None = None) -> str:
     quebra as linhas longas; sem ela (saída redirecionada), só alinha as quebras que já existem."""
     if largura is None:
         return ("\n" + RECUO).join(texto.split("\n"))
-    util = max(40, largura - len(RECUO))
+    util = max(40, largura - len(RECUO) - 1)      # uma coluna livre: o Windows quebra de novo na última
     linhas: list[str] = []
     for paragrafo in texto.split("\n"):
         linhas.extend(textwrap.wrap(paragrafo, util, break_long_words=False, break_on_hyphens=False) or [""])
