@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** em implementação (rev. 4): Fases 0 e 1 concluídas
+- **Status:** em implementação (rev. 5): Fases 0, 1 e 2 concluídas
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`
@@ -78,7 +78,7 @@ cliente digita no CLI
 
 | Tool | Entrada | Saída (campos principais) | Regra pura usada |
 |---|---|---|---|
-| `buscar_produtos` | `texto?`, `categoria?`, `preco_max?`, `marca?`, `so_disponiveis=True`, `limite≤10` | lista de `ProdutoResumo` (id, nome, preço de tabela, preço final, preço PIX ou nulo, disponível, status) | `preco_final`, `disponibilidade`, `normalizar_busca` |
+| `buscar_produtos` | `texto?`, `categoria?`, `preco_max?`, `marca?`, `so_disponiveis=True`, `limite≤10` | lista de `ProdutoResumo` (id, nome, preço de tabela, preço final, preço PIX ou nulo, disponível, status). Só correspondências fortes (relevância ≥ 0,85) entram em `resultados`; parecidos vão para `alternativas_semelhantes`, e o modelo pedido que existe mas não está à venda vai para `indisponiveis_com_esse_nome` | `preco_final`, `disponibilidade`, `buscar` |
 | `detalhar_produto` | `produto_id` | `ProdutoDetalhe` (resumo + specs normalizadas + promoção ativa + `parcelas_max` e `valor_parcela`) | idem + `parcelamento` |
 | `consultar_pedido` | `pedido_id`, `verificacao` (telefone ou e-mail) | `PedidoVisao` (status, data, total registrado, forma de pagamento, rastreio, previsão, itens) ou `{autorizado: false}` | `verificar_dono` |
 | `verificar_arrependimento` | `pedido_id`, `data_recebimento`, `canal` | `{elegivel, motivo, alternativas[]}` | `elegivel_arrependimento` |
