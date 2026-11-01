@@ -93,7 +93,7 @@ def test_ci09_esperar_no_cli_com_retencao(ambiente_cli, capsys):
     assert cli.main(["chat", "--fake", "--retencao", "-m", "Quanto custa o Takamine GD20?",
                      "-m", "/esperar 30m", "-m", "/janela"]) == 0
     out = capsys.readouterr().out
-    assert "Lia (lembrete, qua 25/03 10:30):" in out
+    assert "♪ Lia (lembrete, qua 25/03 10:30) ›" in out
     assert "Janela aberta até 26/03 10:00" in out and "lembrete_enviado" in out
 
 

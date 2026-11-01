@@ -15,16 +15,16 @@ def sem_ambiente(monkeypatch, tmp_path):
 def test_mensagens_nao_interativas_com_debug(capsys):
     assert cli.main(["chat", "--fake", "--debug", "-m", "Quanto custa o Takamine GD20?"]) == 0
     out = capsys.readouterr().out
-    assert "[tool] buscar_produtos" in out
+    assert "│ tool    buscar_produtos" in out
     assert "R$ 2.089,05" in out
-    assert "Lia:" in out
+    assert "♪ Lia ›" in out
 
 
 def test_debug_mascara_telefone(capsys):
     cli.main(["chat", "--fake", "--debug", "-m", "pedido 8, telefone (67) 99654-7821"])
     out = capsys.readouterr().out
-    assert "[tool] consultar_pedido" in out and "BRJL5544332BR" in out
-    linhas_rastro = [l for l in out.splitlines() if "[tool]" in l or l.startswith("         ")]
+    assert "│ tool    consultar_pedido" in out and "BRJL5544332BR" in out
+    linhas_rastro = [l for l in out.splitlines() if "│" in l]
     assert all("99654-7821" not in l for l in linhas_rastro)
 
 

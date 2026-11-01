@@ -55,7 +55,7 @@ def ambiente(monkeypatch, tmp_path):
 def test_cli_mostra_aviso_e_grava_a_fila(ambiente, capsys, tmp_path):
     cli.main(["chat", "--fake", "-m", "quero falar com um vendedor", "-m", "/som", "-m", "/som"])
     out = capsys.readouterr().out
-    assert "[alerta para o vendedor] 🙋 Cliente pediu um vendedor" in out
+    assert "▲ vendedor 🙋 Cliente pediu um vendedor" in out
     assert "Som dos alertas neste chat: " in out
     assert ler_fila(tmp_path / "alertas.jsonl")[0]["tipo"] == "pedido_vendedor"
 

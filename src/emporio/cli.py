@@ -35,11 +35,27 @@ from emporio.retencao import janela as janela_24h
 from emporio.rules import origem as origem_lead
 from emporio.rules.horario import FUSO
 
-CORES = sys.stdout.isatty() and os.getenv("NO_COLOR") is None
+from emporio.agent.prompt import AVISO_PRIVACIDADE
+from emporio.visual import Estilo, largura_terminal, recuar
+
+estilo = Estilo()
 
 
-def _cor(texto: str, codigo: str) -> str:
-    return f"\033[{codigo}m{texto}\033[0m" if CORES else texto
+def _cor(texto: str, papel: str = "suave") -> str:
+    return estilo(texto, papel)
+
+
+def _fala_da_lia(texto: str, rotulo: str = "", saida=None) -> str:
+    """Prefixo da Lia, continuação alinhada e o aviso de privacidade em tom suave."""
+    aviso = ""
+    if texto.endswith(AVISO_PRIVACIDADE):
+        texto, aviso = texto[: -len(AVISO_PRIVACIDADE)].rstrip(), AVISO_PRIVACIDADE
+    largura = largura_terminal(saida)
+    corpo = recuar(texto, largura)
+    if aviso:
+        recuo = " " * (len(rotulo) + 8)
+        corpo += "\n" + recuo + estilo(recuar(aviso, largura).replace("\n", "\n" + recuo), "suave", italico=True)
+    return f"{estilo.lia(rotulo)} {corpo}"
 
 
 def configurar_log(pasta: Path) -> None:
@@ -68,17 +84,18 @@ def configurar_log(pasta: Path) -> None:
 def mostrar(resp: RespostaTurno, debug: bool, saida=None) -> None:
     saida = saida or sys.stdout
     if debug:
-        for e in resp.rastro:
-            status = _cor(f"erro: {e.erro}", "31") if e.erro else "ok"
-            print(_cor(f"  [tool] {e.tool}({e.argumentos}) -> {status} em {e.duracao_ms} ms", "2"), file=saida)
-            print(_cor(f"         {e.resultado}", "2"), file=saida)
         if resp.origem:
             o = origem_lead.POR_CHAVE[resp.origem]
-            print(_cor(f"  [origem] {o.marcador} {o.nome} (marcador removido antes do modelo)", "2"), file=saida)
-        extra = f" | resposta segura: {resp.motivo_segura}" if resp.segura else ""
-        print(_cor(f"  [turno] {resp.latencia_s:.1f} s | {resp.tokens_entrada}+{resp.tokens_saida} tokens | "
-                   f"US$ {resp.custo_usd:.5f}{extra}", "2"), file=saida)
-    print(f"{_cor('Lia:', '1;35')} {resp.texto}\n", file=saida)
+            print(estilo.rastro("origem", f"{o.marcador} {o.nome} · marcador removido antes do modelo"), file=saida)
+        for e in resp.rastro:
+            status = None if not e.erro else f"erro: {e.erro}"
+            print(estilo.rastro("tool", f"{e.tool}({e.argumentos}) · {e.duracao_ms} ms" + ("" if e.erro else " · ok"),
+                                erro=status), file=saida)
+            print(estilo.rastro("", e.resultado), file=saida)
+        turno = f"{resp.latencia_s:.1f} s · {resp.tokens_entrada}+{resp.tokens_saida} tokens · US$ {resp.custo_usd:.5f}"
+        print(estilo.rastro("turno", turno, erro=f"resposta segura: {resp.motivo_segura}" if resp.segura else None),
+              file=saida)
+    print(f"{_fala_da_lia(resp.texto, saida=saida)}\n", file=saida)
 
 
 DIAS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
@@ -101,16 +118,16 @@ def esperar(agente: Agente, conversa: Conversa, arg: str, debug: bool) -> None:
     """Avança o relógio simulado e roda as avaliações de inatividade que vencerem no caminho."""
     delta = duracao(arg)
     if delta is None:
-        print(_cor("Uso: /esperar 30m | 4h | 1d\n", "2"))
+        print(_cor("Uso: /esperar 30m | 4h | 1d\n"))
         return
     relogio, ret = agente.toolbox.relogio, agente.retencao
     if not hasattr(relogio, "ir_para"):
-        print(_cor("(relógio não ajustável nesta configuração)\n", "2"))
+        print(_cor("(relógio não ajustável nesta configuração)\n"))
         return
     destino = relogio() + delta
     if ret is None or not ret.cfg.ativa:
         relogio.ir_para(destino)
-        print(_cor(f"(+{arg}: agora {_quando(destino)}; retenção desligada, use --retencao)\n", "2"))
+        print(_cor(f"(+{arg}: agora {_quando(destino)}; retenção desligada, use --retencao)\n"))
         return
     ac = conversa.acompanhamento
     for _ in range(30):
@@ -121,11 +138,11 @@ def esperar(agente: Agente, conversa: Conversa, arg: str, debug: bool) -> None:
         if av is None:
             break
         if debug or av.acao != "ENVIAR":
-            print(_cor(f"  [retenção {_quando(av.quando)}] {av.acao}: {av.motivo} -> {av.status}", "2"))
+            print(estilo.rastro("retenção", f"{_quando(av.quando)} · {av.acao}: {av.motivo} -> {av.status}"))
         if av.mensagem:
-            print(f"{_cor('Lia (lembrete, ' + _quando(av.quando) + '):', '1;35')} {av.mensagem}\n")
+            print(f"{_fala_da_lia(av.mensagem, f' (lembrete, {_quando(av.quando)})')}\n")
     relogio.ir_para(destino)
-    print(_cor(f"(agora {_quando(destino)}; {janela_24h.rotulo(ac.ultima_msg_cliente, destino)})\n", "2"))
+    print(_cor(f"(agora {_quando(destino)}; {janela_24h.rotulo(ac.ultima_msg_cliente, destino)})\n"))
 
 
 def mostrar_janela(agente: Agente, conversa: Conversa) -> None:
@@ -137,7 +154,7 @@ def mostrar_janela(agente: Agente, conversa: Conversa) -> None:
         limite = f" (lembretes só até {_quando(limite_envio(ac, agente.retencao.cfg))})"
     print(_cor(f"{janela_24h.rotulo(ac.ultima_msg_cliente, agora)}{limite} | acompanhamento: {ac.status.value}"
                f"{' (' + ac.motivo + ')' if ac.motivo else ''} | lembretes neste silêncio: {len(ac.lembretes)} | "
-               f"próxima avaliação: {proxima}\n", "2"))
+               f"próxima avaliação: {proxima}\n"))
 
 
 def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config: Config | None) -> bool:
@@ -149,18 +166,18 @@ def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config:
     elif baixo == "/janela":
         mostrar_janela(agente, conversa)
     elif baixo.startswith("/modelo"):
-        print(_cor(cli_config.comando_modelo(agente, config or Config(), t[len("/modelo"):]) + "\n", "2"))
+        print(_cor(cli_config.comando_modelo(agente, config or Config(), t[len("/modelo"):]) + "\n"))
     elif baixo == "/som":
         central = agente.alertas
         if central is None:
-            print(_cor("(alertas desligados nesta configuração)\n", "2"))
+            print(_cor("(alertas desligados nesta configuração)\n"))
         else:
             central.tocador.ligado = not central.tocador.ligado
             estado = "ligado" if central.tocador.ligado else "desligado (o aviso visual continua)"
             print(_cor(f"Som dos alertas neste chat: {estado}. O vigia (python -m emporio vendedor) tem o "
-                       f"próprio controle (--sem-som).\n", "2"))
+                       f"próprio controle (--sem-som).\n"))
     elif baixo == "/config":
-        print(_cor(cli_config.comando_config(agente, config or Config()) + "\n", "2"))
+        print(_cor(cli_config.comando_config(agente, config or Config()) + "\n"))
     else:
         return False
     return True
@@ -172,13 +189,13 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: 
         for m in mensagens:
             if comando(agente, conversa, m, debug, config):
                 continue
-            print(f"{_cor('Você:', '1;36')} {m}")
+            print(f"{estilo.cliente()} {m}")
             mostrar(agente.responder(conversa, m), debug)
         return 0
-    print(_cor("Empório da Música: atendimento virtual. /novo recomeça, /sair encerra.\n", "2"))
+    print(estilo.banner(agente.llm.modelo))
     while True:
         try:
-            texto = input(_cor("Você: ", "1;36")).strip()
+            texto = input(f"{estilo.cliente()} ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
@@ -190,7 +207,7 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: 
             continue
         if texto.lower() == "/novo":
             conversa = agente.nova_conversa()
-            print(_cor("(nova conversa)\n", "2"))
+            print(_cor("(nova conversa)\n"))
             continue
         mostrar(agente.responder(conversa, texto), debug)
 
@@ -198,7 +215,7 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: 
 def aviso_vendedor(alerta) -> None:
     """Aviso visual no terminal do chat (SPEC-003 RA-04): sai sempre, com ou sem som."""
     extra = f" | conversa {alerta.conversa}" if alerta.tipo == "encaminhamento" else ""
-    print(_cor(f"  [alerta para o vendedor] {alerta.aviso()}{extra}", "1;33"))
+    print(estilo.alerta(f"{alerta.aviso()}{extra}"))
 
 
 def vendedor(argv: list[str]) -> int:
@@ -225,7 +242,7 @@ def vendedor(argv: list[str]) -> int:
                 sys.stdout.write(linha)
                 sys.stdout.flush()
             return
-        print(_cor(linha, "1;33") if "]" in linha[:8] else linha, flush=True)
+        print(_cor(linha, "alerta") if "]" in linha[:8] else linha, flush=True)
 
     try:
         vigiar(caminho_fila(), tocador, mostrar, a.intervalo)
@@ -294,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
     if agente.alertas is not None:
         agente.alertas.avisar = aviso_vendedor
     if a.debug:
-        print(_cor(f"[modelo: {agente.llm.modelo} | ZDR obrigatório | dados: {config.data_dir}]", "2"))
+        print(_cor(f"[modelo: {agente.llm.modelo} | ZDR obrigatório | dados: {config.data_dir}]"))
     return conversar(agente, a.mensagem, a.debug, config)
 
 
