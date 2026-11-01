@@ -71,6 +71,7 @@ class Sessao:
     turno: int = 0                              # turno atual do cliente (o agente atualiza)
     atendimento_humano: bool = False            # solicitação de atendimento humano registrada (SPEC-002 RI-11)
     registro_proposto: dict | None = None       # resumo preparado e ainda não confirmado (§4.3 da spec)
+    origem: str | None = None                   # canal de onde veio o lead (SPEC-005), detectado em código
 
 
 @dataclass(frozen=True)
@@ -381,7 +382,7 @@ class Toolbox:
             existentes = sum(1 for _ in self.tickets_path.open(encoding="utf-8"))
         protocolo = f"SIM-{agora:%Y%m%d}-{existentes + 1:04d}"
         registro = {"protocolo": protocolo, "criado_em": agora.isoformat(), "tipo": a.tipo,
-                    "pedido_id": a.pedido_id, "resumo": mascarar_texto(a.resumo), "simulado": True}
+                    "pedido_id": a.pedido_id, "resumo": mascarar_texto(a.resumo), "origem": sessao.origem, "simulado": True}
         self.tickets_path.parent.mkdir(parents=True, exist_ok=True)
         with self.tickets_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(registro, ensure_ascii=False) + "\n")

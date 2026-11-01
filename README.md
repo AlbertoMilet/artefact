@@ -21,7 +21,7 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 - interface CLI.
 
 **Como foi verificada:**
-- 235 testes automatizados, sem rede e sem chave;
+- 255 testes automatizados, sem rede e sem chave;
 - 42 cenários com o modelo real, 3 repetições cada: as 126 execuções passaram nos verificadores, sem falha crítica ([relatório](docs/avaliacao.md)). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não avaliam nuance de tom.
 
 | O enunciado pede | Seção |
@@ -44,7 +44,7 @@ O `uv run` usa o ambiente do projeto, então não é preciso ativá-lo.
 ```bash
 uv sync                                    # instala as dependências travadas (uv.lock)
 uv run python -m emporio chat --fake       # demonstração SEM chave e SEM modelo de linguagem
-uv run pytest                              # 235 testes, sem rede e sem chave (~10 s)
+uv run pytest                              # 255 testes, sem rede e sem chave (~10 s)
 ```
 
 O modo `--fake` é um roteador por palavras-chave que chama as **tools reais** e formata o resultado. Serve para ver as regras funcionando sem chave, e toda resposta avisa que não há modelo. A qualidade da conversa só aparece com o modelo real; veja os [exemplos](#exemplos-de-conversa).
@@ -205,7 +205,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes (`uv run pytest`, 235, sem rede):**
+**Testes (`uv run pytest`, 255, sem rede):**
 - **Unidade:** regras com valores escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; arrependimento no 7.º dia é elegível, no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a nova verificação ao trocar de pedido, a resposta segura e o payload com ZDR.
 
@@ -238,17 +238,19 @@ Cinco conversas reais com o DeepSeek, sem edição, com o rastro das tools:
 
 ## Funcionalidades extras
 
-Depois de o agente estar pronto e avaliado, fiz três protótipos do que um atendimento por WhatsApp precisaria. Cada um tem spec, testes e revisão independente:
+Depois de o agente estar pronto e avaliado, fiz quatro protótipos do que um atendimento por WhatsApp precisaria. Cada um tem spec, testes e revisão independente:
 
 | Funcionalidade | Padrão | Experimentar |
 |---|---|---|
 | [Retenção na janela de 24 h](docs/specs/SPEC-002-inatividade-janela-24h.md): lembrete contextual quando o cliente some, com bloqueios em código (pedido de parar, horário silencioso, máximo de 3) | desligada | `uv run python -m emporio chat --retencao --debug` e `/esperar 1d` |
 | [Alerta para o vendedor](docs/specs/SPEC-003-alerta-sonoro-vendedor.md): aviso quando o cliente pede um vendedor ou há encaminhamento | **aviso visual ligado no chat**; som só no vigia | `uv run python -m emporio vendedor` num segundo terminal |
 | [Conectar o WhatsApp da loja](docs/specs/SPEC-004-conectar-whatsapp-da-loja.md): login com Facebook, código por SMS e registro na Cloud API, retomável, com token cifrado | comando à parte | `uv run python -m emporio whatsapp conectar --simulado` |
+| [Origem do lead](docs/specs/SPEC-005-origem-do-lead.md): cada canal divulga um link do WhatsApp com um emoji no fim (📸 Instagram, 🎬 TikTok, 🔎 Google, ▶️ YouTube); o código detecta o canal na primeira mensagem e o tira antes do modelo | sempre ligada; sem marcador, origem desconhecida | `uv run python -m emporio origem links` e `origem relatorio` |
 
 **Efeitos no agente, mesmo com a retenção desligada:**
 - O aviso visual de alerta aparece no chat. O som, por padrão, toca só no vigia; `ALERTA_SONORO=false` ou `--sem-som` o silenciam, e o aviso visual continua.
 - Se o cliente voltar depois de 24 h de silêncio, a verificação do pedido e o registro em andamento expiram. O histórico da conversa continua.
+- Um emoji de canal no fim da primeira mensagem é tirado do texto antes do modelo e vira a origem do lead.
 
 A conexão do WhatsApp foi testada só com um transporte falso. Ela **não foi exercitada contra a Meta real**, e receber mensagens exige um webhook HTTPS que não existe neste protótipo. As variáveis dos extras estão em `.env.example`.
 
@@ -301,7 +303,7 @@ Usei o **Claude Code** (Claude Opus 5.5) como par de programação e o **Codex C
 ```text
 src/emporio/   rules/ (regras puras) · tools/ · agent/ (prompt e loop) · llm/ (OpenRouter com ZDR)
                data/ (CSVs validados) · policies/ (manual e BM25) · cli.py
-               retencao/ · alertas/ · whatsapp/   (funcionalidades extras)
+               retencao/ · alertas/ · whatsapp/ · rules/origem.py   (funcionalidades extras)
 evals/         cenários, verificador e runner com o modelo real
 tests/         unit/ · conversa/ · evals/ (pytest -m llm)
 docs/          specs/ · decisoes.md · data_quality.md · fase0-modelos.md · avaliacao*.md · processo/

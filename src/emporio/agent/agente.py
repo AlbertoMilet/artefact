@@ -18,6 +18,7 @@ from emporio.llm.base import LLMClient, LLMIndisponivel, RespostaLLM
 from emporio.retencao import janela as janela_24h
 from emporio.retencao.agente import Retencao
 from emporio.retencao.modelos import Acompanhamento
+from emporio.rules import origem as origem_lead
 from emporio.rules.verificacao import mascarar_texto
 from emporio.tools.toolbox import LOJA, Sessao, Toolbox
 
@@ -62,6 +63,7 @@ class RespostaTurno:
     texto_bruto: str = ""             # texto do modelo antes da máscara (só em memória: evals)
     respostas_vazias: int = 0         # respostas vazias do modelo neste turno (diagnóstico)
     alertas: list = field(default_factory=list)   # alertas para o vendedor emitidos neste turno (SPEC-003)
+    origem: str | None = None         # canal do lead detectado NESTE turno (SPEC-005), para o --debug
 
 
 def _resumir(resultado: dict, limite: int = 400) -> str:
@@ -111,23 +113,31 @@ class Agente:
         conversa.sessao.turno = conversa.turnos
         agora = self.toolbox.relogio()
         ac = conversa.acompanhamento
+        janela_nova = primeira
         if ac.ultima_msg_cliente is not None and not janela_24h.aberta(ac.ultima_msg_cliente, agora):
             # Voltou depois de a janela de 24 h fechar: sessão nova (SPEC-002 RI-12)
             conversa.sessao.pedido_verificado = None
             conversa.sessao.registro_proposto = None
             conversa.sessao.atendimento_humano = False      # o encaminhamento à equipe vale só para aquela janela
+            janela_nova = True
+        origem_turno = None
+        if janela_nova:
+            # SPEC-005: o marcador do link só vale na primeira mensagem da janela e sai do texto antes do modelo
+            achada, texto_cliente = origem_lead.detectar(texto_cliente)
+            if achada is not None:
+                conversa.sessao.origem = origem_turno = achada.chave
         if self.retencao is not None:
             self.retencao.ao_receber(ac, texto_cliente, agora)
         else:
             ac.ultima_msg_cliente = agora
         pedidos = []
         if self.alertas is not None:      # pedido de vendedor alerta já na entrada, sem esperar o modelo
-            pedidos = self.alertas.avaliar_pedido(conversa.id, texto_cliente, agora)
+            pedidos = self.alertas.avaliar_pedido(conversa.id, texto_cliente, agora, origem=conversa.sessao.origem)
             self.alertas.emitir(pedidos)
         system = {"role": "system", "content": montar_prompt(self.toolbox.relogio())}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
-        resp = RespostaTurno(texto="")
+        resp = RespostaTurno(texto="", origem=origem_turno)
         chamadas = erros = vazias = 0
         texto_final: str | None = None
 
@@ -197,7 +207,8 @@ class Agente:
         visivel = mascarar_texto(texto_final)      # o cliente nunca vê contato completo de cliente (RN-09)
         resp.texto = f"{visivel}\n\n{AVISO_PRIVACIDADE}" if primeira else visivel
         if self.alertas is not None:
-            encaminhamentos = self.alertas.avaliar_encaminhamentos(conversa.id, texto_cliente, resp.rastro, agora)
+            encaminhamentos = self.alertas.avaliar_encaminhamentos(conversa.id, texto_cliente, resp.rastro, agora,
+                                                                   origem=conversa.sessao.origem)
             self.alertas.emitir(encaminhamentos)
             resp.alertas = pedidos + encaminhamentos
         resp.latencia_s = time.perf_counter() - inicio
@@ -210,5 +221,5 @@ class Agente:
             "tools": [{"tool": e.tool, "args": e.argumentos, "ms": e.duracao_ms, "erro": e.erro} for e in resp.rastro],
             "tokens_entrada": resp.tokens_entrada, "tokens_saida": resp.tokens_saida,
             "custo_usd": round(resp.custo_usd, 6), "latencia_s": round(resp.latencia_s, 2),
-            "segura": resp.segura, "motivo": resp.motivo_segura,
+            "segura": resp.segura, "motivo": resp.motivo_segura, "origem": conversa.sessao.origem,
         }, ensure_ascii=False))

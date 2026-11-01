@@ -18,6 +18,7 @@ from typing import Callable
 
 from emporio.alertas.deteccao import pediu_vendedor
 from emporio.alertas.som import Tocador
+from emporio.rules.origem import POR_CHAVE
 from emporio.rules.verificacao import mascarar_texto
 
 JANELA_REPETICAO = timedelta(minutes=10)          # RA-03
@@ -34,6 +35,7 @@ class Alerta:
     protocolo: str | None = None
     trecho: str = ""          # mensagem do cliente, mascarada e curta
     tocar: bool = True        # False: vai para a fila sem tocar de novo (RA-03)
+    origem: str | None = None # canal do lead (SPEC-005)
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
@@ -42,8 +44,12 @@ class Alerta:
 
     def aviso(self) -> str:
         if self.tipo == "pedido_vendedor":
-            return "🙋 Cliente pediu um vendedor: quer falar agora."
-        return f"📋 Nova solicitação encaminhada à equipe: {self.motivo}" + (f" ({self.protocolo})" if self.protocolo else "") + "."
+            texto = "🙋 Cliente pediu um vendedor: quer falar agora."
+        else:
+            texto = (f"📋 Nova solicitação encaminhada à equipe: {self.motivo}"
+                     + (f" ({self.protocolo})" if self.protocolo else "") + ".")
+        origem = POR_CHAVE.get(self.origem or "")
+        return texto + (f" Origem: {origem.marcador} {origem.nome}." if origem else "")
 
 
 def caminho_fila() -> Path:
@@ -60,12 +66,14 @@ class CentralAlertas:
         self._ultimo_pedido: dict[str, datetime] = {}
         self._trava = threading.Lock()
 
-    def avaliar_turno(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime) -> list[Alerta]:
+    def avaliar_turno(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime,
+                      origem: str | None = None) -> list[Alerta]:
         """Eventos do turno: pedido explícito na mensagem e solicitações gravadas pela tool."""
-        return (self.avaliar_pedido(conversa, texto_cliente, agora)
-                + self.avaliar_encaminhamentos(conversa, texto_cliente, rastro, agora))
+        return (self.avaliar_pedido(conversa, texto_cliente, agora, origem)
+                + self.avaliar_encaminhamentos(conversa, texto_cliente, rastro, agora, origem))
 
-    def avaliar_pedido(self, conversa: str, texto_cliente: str, agora: datetime) -> list[Alerta]:
+    def avaliar_pedido(self, conversa: str, texto_cliente: str, agora: datetime,
+                       origem: str | None = None) -> list[Alerta]:
         """Pedido explícito: avaliado na ENTRADA do turno, sem esperar o modelo (revisão do Codex)."""
         if not pediu_vendedor(texto_cliente):
             return []
@@ -76,9 +84,11 @@ class CentralAlertas:
             # A janela conta do último ALERTA: quem insiste a cada 5 min volta a alertar após 10 min
             self._ultimo_pedido[conversa] = agora
         trecho = mascarar_texto(" ".join(texto_cliente.split()))[:160]
-        return [Alerta("pedido_vendedor", "cliente pediu atendimento humano", conversa, agora.isoformat(), trecho=trecho)]
+        return [Alerta("pedido_vendedor", "cliente pediu atendimento humano", conversa, agora.isoformat(), trecho=trecho,
+                       origem=origem)]
 
-    def avaliar_encaminhamentos(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime) -> list[Alerta]:
+    def avaliar_encaminhamentos(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime,
+                                origem: str | None = None) -> list[Alerta]:
         alertas: list[Alerta] = []
         trecho = mascarar_texto(" ".join(texto_cliente.split()))[:160]
         recente = self._ultimo_pedido.get(conversa)
@@ -96,7 +106,7 @@ class CentralAlertas:
             tipo = args.get("tipo", "outro")
             alertas.append(Alerta("encaminhamento", ROTULOS.get(tipo, tipo), conversa, agora.isoformat(),
                                   protocolo=resultado.get("protocolo_simulado"), trecho=trecho,
-                                  tocar=not (tipo == "atendimento_humano" and pedido_recente)))
+                                  tocar=not (tipo == "atendimento_humano" and pedido_recente), origem=origem))
         return alertas
 
     def emitir(self, alertas: list[Alerta]) -> None:
@@ -158,7 +168,7 @@ def vigiar(fila: Path, tocador: Tocador, mostrar: Callable[[str], None], interva
         for a in novos:
             hora = a.get("quando", "")[11:16]
             alerta = Alerta(**{k: a[k] for k in ("tipo", "motivo", "conversa", "quando") if k in a},
-                            protocolo=a.get("protocolo"))
+                            protocolo=a.get("protocolo"), origem=a.get("origem"))
             linha = f"[{hora}] {alerta.aviso()} conversa {a.get('conversa')}"
             if a.get("trecho"):
                 linha += f' | "{a["trecho"]}"'

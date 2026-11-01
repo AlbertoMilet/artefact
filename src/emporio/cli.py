@@ -7,6 +7,7 @@
     python -m emporio configurar           escolhe o modelo (deepseek, haiku, gpt-sol), raciocínio, retenção...
     python -m emporio vendedor             vigia de alertas para o vendedor, em outro terminal (SPEC-003)
     python -m emporio whatsapp conectar    conecta o WhatsApp da loja: login com Facebook e SMS (SPEC-004)
+    python -m emporio origem links         links do WhatsApp com o emoji de cada canal; `origem relatorio` (SPEC-005)
 
 Comandos durante a conversa: /novo (recomeça), /modelo [opção] (lista ou troca o modelo), /config, /som,
 /sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
@@ -31,6 +32,7 @@ from emporio.config import RAIZ, Config, montar_agente
 from emporio.data import DadosIndisponiveis
 from emporio.llm import LLMIndisponivel
 from emporio.retencao import janela as janela_24h
+from emporio.rules import origem as origem_lead
 from emporio.rules.horario import FUSO
 
 CORES = sys.stdout.isatty() and os.getenv("NO_COLOR") is None
@@ -70,6 +72,9 @@ def mostrar(resp: RespostaTurno, debug: bool, saida=None) -> None:
             status = _cor(f"erro: {e.erro}", "31") if e.erro else "ok"
             print(_cor(f"  [tool] {e.tool}({e.argumentos}) -> {status} em {e.duracao_ms} ms", "2"), file=saida)
             print(_cor(f"         {e.resultado}", "2"), file=saida)
+        if resp.origem:
+            o = origem_lead.POR_CHAVE[resp.origem]
+            print(_cor(f"  [origem] {o.marcador} {o.nome} (marcador removido antes do modelo)", "2"), file=saida)
         extra = f" | resposta segura: {resp.motivo_segura}" if resp.segura else ""
         print(_cor(f"  [turno] {resp.latencia_s:.1f} s | {resp.tokens_entrada}+{resp.tokens_saida} tokens | "
                    f"US$ {resp.custo_usd:.5f}{extra}", "2"), file=saida)
@@ -241,11 +246,15 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["whatsapp"]:
         from emporio import cli_whatsapp
         return cli_whatsapp.main(argv[1:])
+    if argv[:1] == ["origem"]:
+        from emporio import cli_origem
+        return cli_origem.main(argv[1:])
     ap = argparse.ArgumentParser(prog="emporio", description="Agente de atendimento da Empório da Música")
     sub = ap.add_subparsers(dest="comando", required=True)
     sub.add_parser("configurar", help="configura o agente: modelo (deepseek, haiku, gpt-sol), raciocínio, retenção")
     sub.add_parser("vendedor", help="vigia de alertas para o vendedor (outro terminal)")
     sub.add_parser("whatsapp", help="conecta o WhatsApp da loja: login com Facebook e código por SMS (SPEC-004)")
+    sub.add_parser("origem", help="links por canal e relatório de origem dos leads (SPEC-005)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")
