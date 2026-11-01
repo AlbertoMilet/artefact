@@ -52,7 +52,18 @@ _RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 _RE_TELEFONE = re.compile(r"(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}")
 
 
+# Contatos públicos da loja: não são dado pessoal e não são mascarados
+CONTATOS_PUBLICOS_DIGITOS = {"6733414444", "6733214500"}
+DOMINIOS_PUBLICOS = {"emporiodamusica.com.br", "empóriodamusica.com.br"}
+
+
 def mascarar_texto(texto: str) -> str:
-    """Mascara e-mails e telefones em texto livre (logs e --debug)."""
-    texto = _RE_EMAIL.sub(lambda m: mascarar_email(m.group()), texto)
-    return _RE_TELEFONE.sub(lambda m: mascarar_telefone(m.group()), texto)
+    """Mascara e-mails e telefones de clientes em texto livre (logs e --debug)."""
+    def email(m):
+        e = m.group()
+        return e if e.split("@", 1)[1].lower() in DOMINIOS_PUBLICOS else mascarar_email(e)
+
+    def tel(m):
+        return m.group() if _digitos(m.group()) in CONTATOS_PUBLICOS_DIGITOS else mascarar_telefone(m.group())
+
+    return _RE_TELEFONE.sub(tel, _RE_EMAIL.sub(email, texto))

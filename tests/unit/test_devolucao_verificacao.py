@@ -63,3 +63,5 @@ def test_mascaras():
     assert mascarar_email("anacarol.ferreira@coldmail.com") == "a***@coldmail.com"
     texto = mascarar_texto("ligue (67) 99654-7821 ou escreva para anacarol.ferreira@coldmail.com")
     assert "99654" not in texto and "anacarol" not in texto
+    loja = mascarar_texto("(67) 3341-4444 e contato@emporiodamusica.com.br")
+    assert loja == "(67) 3341-4444 e contato@emporiodamusica.com.br"   # contato público da loja

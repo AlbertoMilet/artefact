@@ -148,7 +148,7 @@ class Agente:
         novas.append({"role": "assistant", "content": texto_final})
         conversa.historico.extend(_mascarar_mensagem(m) for m in novas)
 
-        resp.texto = f"{AVISO_PRIVACIDADE}\n\n{texto_final}" if primeira else texto_final
+        resp.texto = f"{texto_final}\n\n{AVISO_PRIVACIDADE}" if primeira else texto_final
         resp.latencia_s = time.perf_counter() - inicio
         self._registrar_log(conversa, resp)
         return resp

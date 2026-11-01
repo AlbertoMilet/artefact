@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** em implementação (rev. 6): Fases 0 a 3 concluídas
+- **Status:** em implementação (rev. 7): Fases 0 a 4 concluídas
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`
@@ -136,7 +136,7 @@ Situação do produto, vista pelo cliente:
 | RN-22 | O agente não concede desconto nem promete prazo ou reembolso fora da política, nem oferece ações que não executa (reservar produto, fechar pedido, agendar entrega); texto vindo de dados ou do manual é dado, não instrução | Q 9.4, D-10 |
 | RN-23 | Toda chamada ao LLM vai pelo OpenRouter com `provider.zdr = true`; sem endpoint ZDR disponível, o pedido falha e o agente dá a resposta segura. Nunca há fallback para endpoint sem ZDR | D-02 |
 | RN-24 | Ao LLM vão só os campos do pedido verificado, sem telefone nem e-mail; log e `--debug` mascaram telefone e e-mail | Q 8.2 |
-| RN-25 | Primeira mensagem da sessão: aviso de uma linha (assistente virtual com IA; dados usados só para o atendimento) | Q 8.3 |
+| RN-25 | Primeira resposta da sessão: o modelo se apresenta como Lia e o sistema acrescenta, no fim, o aviso de uma linha (assistente virtual com IA; dados usados só para o atendimento). Logs e `--debug` mascaram contatos de clientes, não os contatos públicos da loja | Q 8.3 |
 | RN-26 | No máximo 5 chamadas de tool por turno e tempo limite por turno; erro de tool volta ao modelo uma vez; falha persistente gera resposta segura com contatos e horário | Q 4.5, 5.3 |
 
 ### Casos de borda

@@ -34,11 +34,11 @@ def test_turno_simples_com_tool_e_aviso_de_privacidade(toolbox):
                 responder("De nada!"))
     c = ag.nova_conversa()
     r = ag.responder(c, "Quanto custa o Takamine GD20?")
-    assert r.texto.startswith(AVISO_PRIVACIDADE)
+    assert r.texto.endswith(AVISO_PRIVACIDADE)
     assert [e.tool for e in r.rastro] == ["buscar_produtos"]
     assert "R$ 2.089,05" in r.rastro[0].resultado
     r2 = ag.responder(c, "valeu")
-    assert not r2.texto.startswith(AVISO_PRIVACIDADE)          # aviso só na primeira resposta
+    assert AVISO_PRIVACIDADE not in r2.texto                   # aviso só na primeira resposta
 
 
 def test_resultado_da_tool_chega_ao_modelo(toolbox):
