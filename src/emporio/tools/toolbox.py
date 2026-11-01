@@ -242,10 +242,12 @@ class Toolbox:
             "total_registrado": brl(pedido.total_brl),
             "forma_pagamento": _pagamento(pedido.payment_method),
             "codigo_rastreio": pedido.tracking_code,
-            "previsao_entrega": _data(pedido.estimated_delivery),
+            "previsao_entrega_original": _data(pedido.estimated_delivery),
             "observacao": pedido.notes,
             "itens": itens,
-            "nota": "valores como registrados no pedido; não recalcule com preços atuais (RN-12)",
+            "nota": ("valores como registrados no pedido; não recalcule com preços atuais (RN-12). "
+                     "previsao_entrega_original é só a previsão feita na compra: não diga que o produto foi "
+                     "entregue ou recebido nessa data"),
         }
 
     def verificar_arrependimento(self, a: S.VerificarArrependimentoArgs, sessao: Sessao) -> dict:
