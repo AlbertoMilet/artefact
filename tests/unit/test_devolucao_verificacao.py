@@ -63,5 +63,10 @@ def test_mascaras():
     assert mascarar_email("anacarol.ferreira@coldmail.com") == "a***@coldmail.com"
     texto = mascarar_texto("ligue (67) 99654-7821 ou escreva para anacarol.ferreira@coldmail.com")
     assert "99654" not in texto and "anacarol" not in texto
+    assert "7821" in mascarar_texto("99654-7821") and "99654" not in mascarar_texto("meu tel 99654-7821")
+    assert "99654" not in mascarar_texto("996547821")
+    assert mascarar_texto("protocolo SIM-20260325-0001") == "protocolo SIM-20260325-0001"
+    assert mascarar_texto("rastreio BRJL5544332BR, CEP 79202-333, R$ 2.199,00") ==         "rastreio BRJL5544332BR, CEP 79202-333, R$ 2.199,00"
+    assert "fulano" not in mascarar_texto("fulano@emporiodamusica.com.br")   # só o contato oficial é liberado
     loja = mascarar_texto("(67) 3341-4444 e contato@emporiodamusica.com.br")
     assert loja == "(67) 3341-4444 e contato@emporiodamusica.com.br"   # contato público da loja

@@ -68,8 +68,20 @@ class InfoLojaArgs(_Args):
     pass
 
 
+class CalcularFreteArgs(_Args):
+    cidade: str = Field(min_length=2, description="Cidade de entrega informada pelo cliente")
+    valor: float = Field(gt=0, description="Valor final da compra em reais (preço que o cliente vai pagar)")
+
+
+class ConsultarPromocoesArgs(_Args):
+    nome: str | None = Field(None, description="Nome da campanha perguntada (ex.: Black Friday). "
+                                               "Vazio: lista as promoções ativas")
+
+
 class RegistrarSolicitacaoArgs(_Args):
     tipo: Literal["reclamacao", "devolucao", "troca", "atendimento_humano", "outro"]
     resumo: str = Field(min_length=5, max_length=800, description="Resumo do pedido do cliente, sem telefone nem e-mail")
     pedido_id: int | None = Field(None, description="Pedido relacionado, se houver e estiver verificado")
-    confirmado: bool = Field(description="true só depois que o cliente confirmou o resumo exibido")
+    confirmado: bool = Field(description="false: prepara o resumo para mostrar ao cliente. true: grava, e só é "
+                                         "aceito depois que o cliente confirmou, em mensagem posterior, o resumo "
+                                         "preparado com false")

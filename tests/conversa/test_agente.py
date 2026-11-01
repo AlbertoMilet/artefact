@@ -9,7 +9,7 @@ import pytest
 from emporio.agent import RESPOSTA_SEGURA, Agente
 from emporio.agent.agente import janela
 from emporio.agent.prompt import AVISO_PRIVACIDADE
-from emporio.llm import FakeLLMClient, LLMIndisponivel, OpenRouterClient
+from emporio.llm import FakeLLMClient, LLMIndisponivel, OpenRouterClient, RespostaLLM, ToolCall
 from emporio.llm.fake import chamar, responder
 from emporio.policies import carregar_manual
 from emporio.rules.horario import FUSO, relogio_fixo
@@ -78,6 +78,30 @@ def test_um_erro_de_tool_volta_ao_modelo_que_corrige(toolbox):
                 responder("O Yamaha C40 custa R$ 599,90."))
     r = ag.responder(ag.nova_conversa(), "Yamaha C40?")
     assert not r.segura and [e.erro for e in r.rastro] == ["argumentos_invalidos", None]
+
+
+def test_limite_vale_por_chamada_mesmo_em_lote(toolbox):
+    lote = RespostaLLM(tool_calls=[ToolCall(f"c{i}", "info_loja", "{}") for i in range(7)])
+    llm = FakeLLMClient([lote, responder("ok")])
+    ag = Agente(llm, toolbox, max_tool_calls=5)
+    r = ag.responder(ag.nova_conversa(), "oi")
+    executadas = [e for e in r.rastro if e.erro is None]
+    assert len(executadas) == 5 and [e.erro for e in r.rastro[5:]] == ["limite_de_chamadas"] * 2
+    assert not r.segura and llm.chamadas[-1]["forcar_texto"] is True
+
+
+def test_resposta_do_modelo_e_mascarada_para_o_cliente(toolbox):
+    ag = agente(toolbox, responder("Seu e-mail anacarol.ferreira@coldmail.com está no cadastro."))
+    r = ag.responder(ag.nova_conversa(), "oi")
+    assert "anacarol" not in r.texto and "anacarol" in r.texto_bruto
+
+
+def test_mensagem_de_tool_no_historico_e_mascarada(toolbox):
+    ag = agente(toolbox, chamar("consultar_pedido", pedido_id="x@jmail.com"),
+                chamar("info_loja"), responder("ok"))
+    c = ag.nova_conversa()
+    ag.responder(c, "pedido x@jmail.com")
+    assert "x@jmail.com" not in json.dumps(c.historico, ensure_ascii=False)
 
 
 def test_ca13_cliente_recusa_o_resumo_e_nada_e_gravado(toolbox):

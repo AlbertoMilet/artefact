@@ -67,3 +67,14 @@ def test_specs_strings_normalizado_por_categoria(catalogo):
     assert catalogo.produtos[95].specs_normalizadas["material_cordas"] == "aço"
     assert catalogo.produtos[81].specs_normalizadas["material_cordas"] == "nylon"
     assert catalogo.produtos[135].specs_normalizadas["num_cordas"] == 4
+
+
+def test_id_duplicado_mantem_o_primeiro_e_registra(tmp_path):
+    data = _copia_dados(tmp_path)
+    arq = data / "desafio_tecnico_ai_eng - products.csv"
+    linhas = arq.read_text(encoding="utf-8").splitlines()
+    linhas.append('95,1,Takamine Falso,5,teste,1,active,{},2024-01-01')
+    arq.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    c = carregar(data)
+    assert c.produtos[95].name == "Takamine GD20 Dreadnought Natural"
+    assert any("produto 95 duplicado" in d for d in c.descartes)

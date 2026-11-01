@@ -75,6 +75,13 @@ def test_feriados():
     assert not aberto_agora(_dt(2026, 11, 27, 10, 0), extra)
 
 
+def test_relogio_fixo_converte_para_campo_grande():
+    from datetime import timezone
+    from emporio.rules.horario import relogio_fixo
+    agora = relogio_fixo(datetime(2026, 3, 25, 2, 0, tzinfo=timezone.utc))()
+    assert agora.date() == date(2026, 3, 24) and agora.hour == 22
+
+
 def test_proxima_abertura():
     assert proxima_abertura(_dt(2026, 11, 6, 20, 0)) == _dt(2026, 11, 7, 9, 0)     # sexta 20h -> sábado 9h
     assert proxima_abertura(_dt(2026, 11, 7, 14, 0)) == _dt(2026, 11, 9, 9, 0)     # sábado 14h -> segunda

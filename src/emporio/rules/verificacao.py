@@ -49,19 +49,27 @@ def mascarar_email(email: str) -> str:
 
 
 _RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
-_RE_TELEFONE = re.compile(r"(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}")
+# Telefone com DDD (com ou sem +55, parênteses e separadores) ou só o número local (8 ou 9 dígitos,
+# formatos aceitos por verificar_dono). Os limites (?<![\w-]) e (?![\w-]) impedem casar dentro de
+# identificadores como o protocolo "SIM-20260325-0001" ou o rastreio "BRJL5544332BR".
+_RE_TELEFONE = re.compile(
+    r"(?<![\w-])(?:"
+    r"(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}"     # com DDD
+    r"|9?\d{4}[-\s]\d{4}"                               # local com separador
+    r"|9\d{8}"                                          # celular local sem separador
+    r")(?![\w-])")
 
 
-# Contatos públicos da loja: não são dado pessoal e não são mascarados
+# Contatos públicos da loja: não são dado pessoal e não são mascarados (só os exatos)
 CONTATOS_PUBLICOS_DIGITOS = {"6733414444", "6733214500"}
-DOMINIOS_PUBLICOS = {"emporiodamusica.com.br", "empóriodamusica.com.br"}
+EMAILS_PUBLICOS = {"contato@emporiodamusica.com.br", "contato@empóriodamusica.com.br"}
 
 
 def mascarar_texto(texto: str) -> str:
-    """Mascara e-mails e telefones de clientes em texto livre (logs e --debug)."""
+    """Mascara e-mails e telefones de clientes em texto livre (logs, --debug, histórico, exportações)."""
     def email(m):
         e = m.group()
-        return e if e.split("@", 1)[1].lower() in DOMINIOS_PUBLICOS else mascarar_email(e)
+        return e if e.lower() in EMAILS_PUBLICOS else mascarar_email(e)
 
     def tel(m):
         return m.group() if _digitos(m.group()) in CONTATOS_PUBLICOS_DIGITOS else mascarar_telefone(m.group())

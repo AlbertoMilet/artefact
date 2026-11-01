@@ -70,9 +70,13 @@ def perfil(data: Path) -> tuple[list[tuple[str, str, bool, str]], dict]:
         R.append((cod, titulo, ok, evid))
 
     # Integridade estrutural
-    ids_dup = {n: [k for k, v in Counter(r for r in col).items() if v > 1]
-               for n, col in [("products", [p for p in prod]), ("orders", list(ped)),
-                              ("customers", list(cli))]}
+    def duplicados(nome: str, chave: str) -> list[str]:      # conta nas linhas originais, antes do dict
+        return [k for k, v in Counter(r[chave] for r in ler(data, nome)).items() if v > 1]
+
+    ids_dup = {"products": duplicados("products", "product_id"), "orders": duplicados("orders", "order_id"),
+               "customers": duplicados("customers", "customer_id"),
+               "promotions": duplicados("promotions", "promotion_id"),
+               "categories": duplicados("categories", "category_id")}
     orfaos = (
         {i["product_id"] for i in itens} - set(prod),
         {i["order_id"] for i in itens} - set(ped),

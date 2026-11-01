@@ -55,6 +55,7 @@ class RespostaTurno:
     latencia_s: float = 0.0
     segura: bool = False              # True quando caiu na resposta segura
     motivo_segura: str | None = None
+    texto_bruto: str = ""             # texto do modelo antes da máscara (só em memória: evals)
 
 
 def _resumir(resultado: dict, limite: int = 400) -> str:
@@ -73,7 +74,7 @@ def janela(historico: list[dict], turnos: int) -> list[dict]:
 
 def _mascarar_mensagem(m: dict) -> dict:
     m = dict(m)
-    if m.get("role") in ("user", "assistant") and m.get("content"):
+    if m.get("role") in ("user", "assistant", "tool") and m.get("content"):
         m["content"] = mascarar_texto(m["content"])
     if m.get("tool_calls"):
         m["tool_calls"] = [{**c, "function": {**c["function"], "arguments": mascarar_texto(c["function"]["arguments"])}}
@@ -97,6 +98,7 @@ class Agente:
         inicio = time.perf_counter()
         primeira = conversa.turnos == 0
         conversa.turnos += 1
+        conversa.sessao.turno = conversa.turnos
         system = {"role": "system", "content": montar_prompt(self.toolbox.relogio())}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
@@ -117,6 +119,9 @@ class Agente:
                 resp.tokens_entrada += r.uso.tokens_entrada
                 resp.tokens_saida += r.uso.tokens_saida
                 resp.custo_usd += r.uso.custo_usd
+                if time.perf_counter() - inicio > self.timeout_turno_s:
+                    resp.motivo_segura = "tempo_limite"
+                    break
                 if not r.tool_calls or limite:
                     texto_final = (r.texto or "").strip() or None
                     if texto_final is None and vazias == 0:
@@ -127,11 +132,15 @@ class Agente:
                     break
                 novas.append(r.mensagem_assistente())
                 for call in r.tool_calls:
-                    chamadas += 1
                     t0 = time.perf_counter()
-                    resultado = self.toolbox.executar(call.nome, call.argumentos, conversa.sessao)
+                    if chamadas >= self.max_tool_calls:   # limite por chamada, não por lote (RN-26)
+                        resultado = {"erro": "limite_de_chamadas",
+                                     "detalhes": "limite de consultas do turno atingido; responda com o que já tem"}
+                    else:
+                        chamadas += 1
+                        resultado = self.toolbox.executar(call.nome, call.argumentos, conversa.sessao)
                     erro = resultado.get("erro") if isinstance(resultado, dict) else None
-                    erros += bool(erro)
+                    erros += bool(erro) and erro != "limite_de_chamadas"
                     integral = json.dumps(resultado, ensure_ascii=False)
                     resp.rastro.append(EventoTool(call.nome, mascarar_texto(call.argumentos),
                                                   mascarar_texto(_resumir(resultado)),
@@ -154,7 +163,9 @@ class Agente:
         novas.append({"role": "assistant", "content": texto_final})
         conversa.historico.extend(_mascarar_mensagem(m) for m in novas)
 
-        resp.texto = f"{texto_final}\n\n{AVISO_PRIVACIDADE}" if primeira else texto_final
+        resp.texto_bruto = texto_final
+        visivel = mascarar_texto(texto_final)      # o cliente nunca vê contato completo de cliente (RN-09)
+        resp.texto = f"{visivel}\n\n{AVISO_PRIVACIDADE}" if primeira else visivel
         resp.latencia_s = time.perf_counter() - inicio
         self._registrar_log(conversa, resp)
         return resp

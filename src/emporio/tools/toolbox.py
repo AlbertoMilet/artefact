@@ -13,6 +13,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
 
@@ -20,10 +21,12 @@ from pydantic import BaseModel, ValidationError
 
 from emporio.data.loader import Catalogo
 from emporio.data.models import Pedido, Produto
+from emporio.data.normalize import normalizar
 from emporio.policies.busca import Manual
 from emporio.rules.catalogo import Resultado, buscar, disponibilidade
 from emporio.rules.devolucao import elegivel_arrependimento
 from emporio.rules.dinheiro import brl
+from emporio.rules.frete import frete
 from emporio.rules.horario import Calendario, Relogio, aberto_agora, proxima_abertura, relogio_real
 from emporio.rules.parcelamento import parcelamento_maximo
 from emporio.rules.precos import preco_final
@@ -65,6 +68,8 @@ class Sessao:
     """Estado explícito da conversa (SPEC-001 §4.3)."""
     pedido_verificado: int | None = None
     registros: list[str] = field(default_factory=list)
+    turno: int = 0                              # turno atual do cliente (o agente atualiza)
+    registro_proposto: dict | None = None       # resumo preparado e ainda não confirmado (§4.3 da spec)
 
 
 @dataclass(frozen=True)
@@ -97,8 +102,13 @@ class Toolbox:
                  "parcelamento, promoções, privacidade.", S.ConsultarPoliticasArgs, self.consultar_politicas),
             Tool("info_loja", "Endereço, telefone, e-mail, horário de funcionamento e se a loja está aberta agora.",
                  S.InfoLojaArgs, self.info_loja),
+            Tool("calcular_frete", "Frete e prazo de entrega para uma cidade e um valor de compra (§5).",
+                 S.CalcularFreteArgs, self.calcular_frete),
+            Tool("consultar_promocoes", "Promoções cadastradas: se uma campanha (ex.: Black Friday) está ativa, ou a "
+                 "lista das promoções ativas com produto e preço.", S.ConsultarPromocoesArgs, self.consultar_promocoes),
             Tool("registrar_solicitacao", "Registra (de forma simulada, protótipo) reclamação, devolução, troca ou "
-                 "pedido de atendimento humano. Só com confirmado=true depois que o cliente aprovar o resumo.",
+                 "pedido de atendimento humano, em dois passos: confirmado=false prepara o resumo para mostrar ao "
+                 "cliente; confirmado=true grava, depois que ele aprovar.",
                  S.RegistrarSolicitacaoArgs, self.registrar_solicitacao),
         ]}
 
@@ -120,8 +130,18 @@ class Toolbox:
         try:
             dados = json.loads(argumentos) if isinstance(argumentos, str) else (argumentos or {})
             args = tool.args.model_validate(dados)
-        except (json.JSONDecodeError, ValidationError) as e:
-            return {"erro": "argumentos_invalidos", "detalhes": str(e).splitlines()[:6]}
+        except json.JSONDecodeError:
+            return {"erro": "argumentos_invalidos", "detalhes": ["JSON inválido"]}
+        except ValidationError as e:
+            # Só campo, tipo e mensagem: nunca o valor recebido, que pode ser telefone ou e-mail (RN-24)
+            detalhes = []
+            for err in e.errors(include_input=False, include_url=False):
+                campo = ".".join(str(p) for p in err.get("loc", ())) or "argumentos"
+                msg = err.get("msg", "")
+                if err.get("type") == "value_error" and "categoria" in campo:
+                    msg = f"categoria desconhecida; válidas: {', '.join(S.CATEGORIAS)}"
+                detalhes.append(f"{campo}: {msg}")
+            return {"erro": "argumentos_invalidos", "detalhes": detalhes[:6]}
         try:
             return tool.funcao(args, sessao)
         except Exception:  # falha interna não derruba a conversa
@@ -300,11 +320,58 @@ class Toolbox:
             out["proxima_abertura"] = f"{DIAS[prox.weekday()]}, {prox.strftime('%d/%m')} às {prox.strftime('%H:%M')}"
         return out
 
+    def calcular_frete(self, a: S.CalcularFreteArgs, sessao: Sessao) -> dict:
+        f = frete(a.cidade, Decimal(str(a.valor)))
+        out: dict[str, Any] = {"cidade": a.cidade, "valor_compra": brl(Decimal(str(a.valor))), "tipo": f.tipo,
+                               "prazo": f.prazo, "observacao": f.observacao}
+        if f.tipo == "metropolitano":
+            out["frete"] = "grátis" if f.valor == 0 else brl(f.valor)
+            out["regra"] = "grátis só acima de R$ 500,00; até R$ 500,00, inclusive, taxa de R$ 35,00 (§5.1)"
+        else:
+            out["frete"] = None
+            out["modalidades"] = f.modalidades
+            out["orientacao"] = "Não informe valor de frete: depende de CEP, peso e dimensões (§5.2)."
+        return out
+
+    def consultar_promocoes(self, a: S.ConsultarPromocoesArgs, sessao: Sessao) -> dict:
+        def item(pr) -> dict:
+            p = self.catalogo.produtos[pr.product_id]
+            d: dict[str, Any] = {"campanha": pr.description, "produto": p.name, "ativa": pr.is_active}
+            if pr.is_active and disponibilidade(p) in ("disponivel", "sem_estoque"):
+                preco = preco_final(p, self.catalogo.promocoes_ativas(p.product_id))
+                d.update(preco_original=brl(preco.tabela), preco_promocional=brl(preco.final),
+                         percentual=f"{int(pr.discount_percent)}%" if pr.discount_percent == pr.discount_percent.to_integral_value()
+                         else f"{pr.discount_percent}%")
+            return d
+
+        if not a.nome:
+            ativas = [item(pr) for pr in self.catalogo.promocoes if pr.is_active]
+            return {"promocoes_ativas": ativas, "total": len(ativas)}
+        alvo = normalizar(a.nome)
+        casam = [pr for pr in self.catalogo.promocoes if alvo in normalizar(pr.description)
+                 or normalizar(pr.description) in alvo]
+        ativas = [item(pr) for pr in casam if pr.is_active]
+        out: dict[str, Any] = {"campanha_perguntada": a.nome, "ativas_com_esse_nome": ativas}
+        if not ativas:
+            out["orientacao"] = ("Nenhuma promoção com esse nome está ativa no sistema agora. Diga isso com "
+                                 "transparência e apresente o preço atual se o cliente citar um produto; não diga "
+                                 "quando terminou nem quando volta (as promoções não têm datas cadastradas).")
+        return out
+
     def registrar_solicitacao(self, a: S.RegistrarSolicitacaoArgs, sessao: Sessao) -> dict:
-        if not a.confirmado:
-            return {"gravado": False, "orientacao": "Mostre o resumo ao cliente e só registre depois que ele confirmar."}
         if a.pedido_id is not None and sessao.pedido_verificado != a.pedido_id:
             return {"gravado": False, "orientacao": "O pedido citado não foi verificado nesta conversa."}
+        if not a.confirmado:
+            sessao.registro_proposto = {"tipo": a.tipo, "resumo": a.resumo, "pedido_id": a.pedido_id,
+                                        "turno": sessao.turno}
+            return {"gravado": False, "resumo_para_confirmar": a.resumo, "tipo": a.tipo,
+                    "orientacao": "Mostre este resumo ao cliente e pergunte se pode registrar. Só chame com "
+                                  "confirmado=true depois que ele responder que sim."}
+        proposta = sessao.registro_proposto
+        if proposta is None or proposta["turno"] >= sessao.turno or proposta["tipo"] != a.tipo:
+            return {"gravado": False, "orientacao": "Antes de gravar, chame com confirmado=false, mostre o resumo e "
+                                                    "espere o cliente confirmar numa nova mensagem."}
+        sessao.registro_proposto = None
         agora = self.relogio()
         existentes = 0
         if self.tickets_path.exists():

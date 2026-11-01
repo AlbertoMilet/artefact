@@ -74,7 +74,8 @@ def relogio_real() -> datetime:
 
 
 def relogio_fixo(momento: datetime) -> Relogio:
-    fixo = momento if momento.tzinfo else momento.replace(tzinfo=FUSO)
+    """Sempre no horário de Campo Grande: "2026-03-25T02:00+00:00" ainda é 24/03 lá (revisão do Codex)."""
+    fixo = momento.astimezone(FUSO) if momento.tzinfo else momento.replace(tzinfo=FUSO)
     return lambda: fixo
 
 

@@ -80,6 +80,26 @@ def carregar(data_dir: Path | str) -> Catalogo:
     lido = {nome: _ler(data_dir / f"{PREFIXO}{nome}.csv", modelo, descartes)
             for nome, modelo in ARQUIVOS.items()}
 
+    def unicos(itens: list, chave: str, nome: str) -> list:
+        """ID repetido: mantém o primeiro e registra o descarte (não sobrescreve em silêncio)."""
+        vistos, out = set(), []
+        for x in itens:
+            k = getattr(x, chave)
+            if k in vistos:
+                motivo = f"{nome} {k} duplicado: mantido o primeiro registro"
+                log.warning(motivo)
+                descartes.append(motivo)
+                continue
+            vistos.add(k)
+            out.append(x)
+        return out
+
+    lido["categories"] = unicos(lido["categories"], "category_id", "categoria")
+    lido["customers"] = unicos(lido["customers"], "customer_id", "cliente")
+    lido["products"] = unicos(lido["products"], "product_id", "produto")
+    lido["promotions"] = unicos(lido["promotions"], "promotion_id", "promoção")
+    lido["orders"] = unicos(lido["orders"], "order_id", "pedido")
+
     categorias = {c.category_id: c for c in lido["categories"]}
     clientes = {c.customer_id: c for c in lido["customers"]}
 

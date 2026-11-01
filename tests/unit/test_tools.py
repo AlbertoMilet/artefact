@@ -27,7 +27,8 @@ def s():
 def test_schemas_openai_validos(tb):
     nomes = [t["function"]["name"] for t in tb.schemas_openai()]
     assert nomes == ["buscar_produtos", "detalhar_produto", "consultar_pedido", "verificar_arrependimento",
-                     "consultar_politicas", "info_loja", "registrar_solicitacao"]
+                     "consultar_politicas", "info_loja", "calcular_frete", "consultar_promocoes",
+                     "registrar_solicitacao"]
     for t in tb.schemas_openai():
         assert t["function"]["parameters"]["type"] == "object"
         json.dumps(t)
@@ -156,14 +157,49 @@ def test_info_loja_fechada_informa_proxima_abertura(catalogo, s):
 
 
 def test_ca13_registro_so_com_confirmacao(tb, s):
+    s.turno = 1
+    # confirmar sem proposta anterior é recusado
+    r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "Chegou riscado", "confirmado": True}, s)
+    assert r["gravado"] is False
     r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "Instrumento chegou riscado",
                                               "confirmado": False}, s)
+    assert r["gravado"] is False and r["resumo_para_confirmar"] and not tb.tickets_path.exists()
+    # mesma mensagem do cliente: ainda não houve confirmação
+    r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "x" * 10, "confirmado": True}, s)
     assert r["gravado"] is False and not tb.tickets_path.exists()
+    s.turno = 2                                           # o cliente respondeu
+    r = tb.executar("registrar_solicitacao", {"tipo": "troca", "resumo": "outro tipo", "confirmado": True}, s)
+    assert r["gravado"] is False                          # tipo diferente do proposto
     r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "confirmado": True,
                                               "resumo": "Instrumento chegou riscado, contato (67) 99654-7821"}, s)
     assert r["gravado"] and r["protocolo_simulado"] == "SIM-20260325-0001"
+    assert "SIM-20260325-0001" in json.dumps(r)            # protocolo não é corrompido pela máscara
+    assert s.registro_proposto is None                    # autorização consumida
     linha = json.loads(tb.tickets_path.read_text(encoding="utf-8"))
     assert "99654" not in linha["resumo"] and linha["simulado"] is True
+
+
+def test_calcular_frete(tb, s):
+    r = tb.executar("calcular_frete", {"cidade": "Campo Grande", "valor": 500}, s)
+    assert r["frete"] == "R$ 35,00"
+    assert tb.executar("calcular_frete", {"cidade": "campo grande", "valor": 500.01}, s)["frete"] == "grátis"
+    r = tb.executar("calcular_frete", {"cidade": "Dourados", "valor": 700}, s)
+    assert r["frete"] is None and len(r["modalidades"]) == 3
+
+
+def test_consultar_promocoes(tb, s):
+    r = tb.executar("consultar_promocoes", {"nome": "Black Friday"}, s)
+    assert r["ativas_com_esse_nome"] == [] and "orientacao" in r
+    r = tb.executar("consultar_promocoes", {}, s)
+    assert r["total"] == 4
+    ohana = next(p for p in r["promocoes_ativas"] if "Ohana CK-20" in p["produto"])
+    assert (ohana["preco_original"], ohana["preco_promocional"], ohana["percentual"]) == ("R$ 549,00", "R$ 439,20", "20%")
+
+
+def test_erro_de_argumento_nao_ecoa_o_valor_recebido(tb, s):
+    r = tb.executar("consultar_pedido", {"pedido_id": "fulano@jmail.com"}, s)
+    assert r["erro"] == "argumentos_invalidos"
+    assert "fulano" not in json.dumps(r, ensure_ascii=False)
 
 
 def test_registro_com_pedido_nao_verificado_e_recusado(tb, s):
