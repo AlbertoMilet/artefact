@@ -16,6 +16,7 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 2. [Arquitetura](#arquitetura)
    - [Inatividade na janela de 24 h (retenção)](#inatividade-na-janela-de-24-h-retenção)
    - [Alerta sonoro para o vendedor](#alerta-sonoro-para-o-vendedor)
+   - [Conectar o WhatsApp da loja](#conectar-o-whatsapp-da-loja)
 3. [Decisões técnicas](#decisões-técnicas)
 4. [Estratégia de prompt](#estratégia-de-prompt)
 5. [Tratamento dos dados e suposições](#tratamento-dos-dados-e-suposições)
@@ -55,7 +56,7 @@ Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [g
 
 | Comando | O que faz |
 |---|---|
-| `uv run pytest` | 189 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
+| `uv run pytest` | 207 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
 | `uv run pytest -m llm` | evals com o modelo real como teste (critérios CA-16 a CA-18) |
 | `uv run python -m evals.rodar --repeticoes 3` | avaliação completa com o modelo real e relatório em `docs/avaliacao.md` |
 | `uv run python scripts/gerar_exemplos.py` | regenera os exemplos de conversa em `examples/conversas/` |
@@ -63,6 +64,7 @@ Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [g
 | `uv run python scripts/comparar_modelos.py` | compara modelos com ZDR e gera `docs/fase0-modelos.md` |
 | `uv run python -m emporio chat --retencao` | liga a retenção por inatividade (SPEC-002): `/esperar 30m`, `/janela` |
 | `uv run python -m emporio vendedor` | vigia de alertas para o vendedor (segundo terminal); `--testar` toca os sons |
+| `uv run python -m emporio whatsapp conectar` | conecta o WhatsApp da loja: login com Facebook e código por SMS (`--simulado` sem Meta) |
 | `uv run python -m emporio configurar` | configura o agente: modelo (`deepseek`, `haiku`, `gpt-sol`), raciocínio, retenção, data de referência |
 | `uv run python -m evals.rodar --modelo haiku` | avalia outro modelo (apelido ou slug do OpenRouter) |
 
@@ -159,6 +161,25 @@ Você: Oi, quero falar com um vendedor, por favor
 Você: Pode registrar sim
   [alerta para o vendedor] 📋 Nova solicitação encaminhada à equipe: reclamação (SIM-20260325-0001).
 ```
+
+### Conectar o WhatsApp da loja
+
+Funcionalidade da [SPEC-004](docs/specs/SPEC-004-conectar-whatsapp-da-loja.md), seguindo o desenho que o BaixaAI planejou para o Embedded Signup ("um app da Meta, vários números") e a Graph API v25.0 do cliente dele. O dono da loja conecta o número de WhatsApp da loja à Cloud API num comando guiado e retomável:
+
+```bash
+uv run python -m emporio whatsapp conectar --simulado   # demonstração: sem app da Meta e sem SMS de verdade
+uv run python -m emporio whatsapp conectar              # real: META_APP_ID e META_APP_SECRET no .env
+uv run python -m emporio whatsapp status                # etapa atual e próxima ação
+```
+
+O comando conduz cinco etapas:
+1. **Login com a conta do Facebook** (OAuth com `state` contra CSRF, retorno em `http://localhost:8765/callback`), troca por token de longa duração e validação com `debug_token`: mesmo app, permissões do WhatsApp e contas do WhatsApp Business autorizadas.
+2. **Número:** escolher um da conta ou cadastrar um novo, normalizado para +55.
+3. **Código por SMS** (ou ligação) no celular da loja. Até 5 tentativas por código, e outro código só depois de 60 s.
+4. **Registro** com o PIN de duas etapas, que não é salvo.
+5. **Assinatura dos webhooks.**
+
+Interrompido, o comando retoma da etapa salva. O token é guardado **cifrado com Fernet** (`WHATSAPP_CHAVE_CIFRA`, gerada por `whatsapp gerar-chave`). Sem a chave, o token não é salvo e o resto funciona. Receber e responder mensagens pelo webhook exige um servidor HTTPS público e é o próximo passo. As chamadas reais estão testadas sem rede (endpoints e parâmetros da v25.0), mas **ainda não foram exercitadas com um app da Meta de verdade**.
 
 A especificação completa (escopo, 26 regras numeradas, casos de borda e 19 critérios de aceite) está em [docs/specs/SPEC-001-agente-atendimento.md](docs/specs/SPEC-001-agente-atendimento.md); as decisões, em formato curto, em [docs/decisoes.md](docs/decisoes.md).
 
@@ -295,7 +316,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes automatizados (`uv run pytest`): 189, sem rede e sem chave.**
+**Testes automatizados (`uv run pytest`): 207, sem rede e sem chave.**
 - **Unidade:** regras e tools, com valores esperados escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; R$ 500,00 paga frete; arrependimento no 7.º dia elegível e no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a troca de pedido (que exige nova verificação), a resposta segura, o histórico mascarado e o payload com ZDR.
 
@@ -361,7 +382,7 @@ Cinco conversas reais com o DeepSeek, sem edição, com o rastro das tools em um
 - **A verificação de valores dos evals confere o valor, não a associação** (um preço real de outro produto passaria). Comparar fatos por produto e campo fica para "com mais tempo".
 
 **Com mais tempo:**
-- integração com a WhatsApp Cloud API, com o mesmo agente atrás de um webhook e o telefone como identificação;
+- receber e responder pelo WhatsApp: a conexão do número já existe (SPEC-004); falta o webhook HTTPS com o mesmo agente atrás e o telefone como identificação;
 - persistência entre sessões, agendador da retenção em produção (varredura a cada minuto, com o acompanhamento no banco) e um painel para o atendimento humano assumir a conversa;
 - encaminhamento real de solicitações;
 - uma CLI gerencial para a equipe;
@@ -421,6 +442,7 @@ src/emporio/
   agent/       system prompt em camadas e loop do agente
   retencao/    janela de 24 h, regras de inatividade e agente de retenção (SPEC-002)
   alertas/     detecção de pedido de vendedor, fila, som sintetizado e vigia do vendedor (SPEC-003)
+  whatsapp/    conexão do WhatsApp da loja: OAuth do Facebook, Graph API v25.0, SMS, registro (SPEC-004)
   cli.py       python -m emporio chat
   cli_config.py, modelos.py, preferencias.py   python -m emporio configurar, as 3 opções de modelo com ZDR e o .emporio.json
 evals/         casos, verificações críticas e runner com o modelo real

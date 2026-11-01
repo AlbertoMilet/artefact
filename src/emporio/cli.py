@@ -6,6 +6,7 @@
     python -m emporio chat -m "oi" -m "qual o endereço?"   mensagens em sequência, sem interação
     python -m emporio configurar           escolhe o modelo (deepseek, haiku, gpt-sol), raciocínio, retenção...
     python -m emporio vendedor             vigia de alertas para o vendedor, em outro terminal (SPEC-003)
+    python -m emporio whatsapp conectar    conecta o WhatsApp da loja: login com Facebook e SMS (SPEC-004)
 
 Comandos durante a conversa: /novo (recomeça), /modelo [opção] (lista ou troca o modelo), /config, /som,
 /sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
@@ -232,10 +233,14 @@ def main(argv: list[str] | None = None) -> int:
         return cli_config.configurar(argv[1:])
     if argv[:1] == ["vendedor"]:
         return vendedor(argv[1:])
+    if argv[:1] == ["whatsapp"]:
+        from emporio import cli_whatsapp
+        return cli_whatsapp.main(argv[1:])
     ap = argparse.ArgumentParser(prog="emporio", description="Agente de atendimento da Empório da Música")
     sub = ap.add_subparsers(dest="comando", required=True)
     sub.add_parser("configurar", help="configura o agente: modelo (deepseek, haiku, gpt-sol), raciocínio, retenção")
     sub.add_parser("vendedor", help="vigia de alertas para o vendedor (outro terminal)")
+    sub.add_parser("whatsapp", help="conecta o WhatsApp da loja: login com Facebook e código por SMS (SPEC-004)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")

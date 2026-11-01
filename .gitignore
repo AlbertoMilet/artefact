@@ -8,6 +8,7 @@ __pycache__/
 # Segredos e preferências locais
 .env
 .emporio.json
+.emporio_whatsapp.json
 
 # Material original do processo seletivo (os dados usados pelo agente estão em data/)
 Desafio Técnico AI Engineer 2026/
