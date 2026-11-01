@@ -35,13 +35,16 @@ def relatorio(resultados: list[Resultado], modelo: str, duracao_s: float) -> str
     criticas = sum(bool(r.criticas) for r in resultados)
     custo = sum(r.custo_usd for r in resultados)
     lat = sum(r.latencia_s for r in resultados) / max(total, 1)
+    tokens = sum(r.tokens for r in resultados) // max(total, 1)
+    vazias = sum(r.vazias for r in resultados)
     linhas = [
         "# Avaliação do agente (Fase 5, SPEC-001)", "",
         f"Gerado por `uv run python -m evals.rodar` em {time.strftime('%Y-%m-%d %H:%M')}. "
         f"Modelo **`{modelo}`** via OpenRouter com Zero Data Retention. Relógio dos casos: quarta-feira, "
         "25/03/2026 10:00 (dentro do período dos pedidos), salvo indicação no caso.", "",
         f"**Resultado: {ok}/{total} casos aprovados ({ok / max(total, 1):.0%}); "
-        f"{criticas} com falha crítica.** Latência média por conversa {lat:.1f} s; custo total US$ {custo:.4f}; "
+        f"{criticas} com falha crítica.** Latência média por conversa {lat:.1f} s; {tokens} tokens por conversa; "
+        f"{vazias} respostas vazias do modelo (tratadas com nova tentativa); custo total US$ {custo:.4f}; "
         f"duração {duracao_s:.0f} s.", "",
         "Falha crítica: valor em R$ que não veio de nenhuma tool nem do cliente, telefone ou e-mail de cliente na "
         "resposta, promessa de ação que o agente não executa (reservar, cancelar) ou negar uma categoria que a loja "
@@ -75,8 +78,11 @@ def main() -> int:
     ap.add_argument("--filtro", help="parte do id ou da categoria")
     ap.add_argument("--repeticoes", type=int, default=1)
     ap.add_argument("--saida", type=Path, default=RAIZ / "docs" / "avaliacao.md")
+    ap.add_argument("--raciocinio", choices=["ligado", "desligado"], help="sobrescreve LLM_RACIOCINIO")
     a = ap.parse_args()
     config = replace(Config.do_ambiente(), llm_provider="openrouter", openrouter_model=a.modelo)
+    if a.raciocinio:
+        config = replace(config, raciocinio=a.raciocinio == "ligado")
     if not config.openrouter_api_key:
         print("Defina OPENROUTER_API_KEY no .env.")
         return 2

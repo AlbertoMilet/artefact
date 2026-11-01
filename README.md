@@ -51,7 +51,7 @@ uv run python -m emporio chat -m "Qual o endereço?" -m "Estão abertos agora?" 
 | `uv run python scripts/comparar_modelos.py` | compara modelos com ZDR e gera `docs/fase0-modelos.md` |
 | `uv run python -m emporio chat --retencao` | liga a retenção por inatividade (SPEC-002): `/esperar 30m`, `/janela` |
 
-**Variáveis do `.env`** (todas em `.env.example`): `LLM_PROVIDER` (`openrouter` ou `fake`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, e as opcionais `DATA_REFERENCIA` (data e hora fixas, ISO 8601, para demonstrar prazos com os pedidos de 2026), `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10) e `EMPORIO_DATA_DIR` (pasta dos CSVs; o manual fica em `src/emporio/policies/manual.md`).
+**Variáveis do `.env`** (todas em `.env.example`): `LLM_PROVIDER` (`openrouter` ou `fake`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, e as opcionais `DATA_REFERENCIA` (data e hora fixas, ISO 8601, para demonstrar prazos com os pedidos de 2026), `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`) e `EMPORIO_DATA_DIR` (pasta dos CSVs; o manual fica em `src/emporio/policies/manual.md`).
 
 **Modo demonstração (`--fake`).** Serve para quem não tem chave ver as tools e as regras funcionando. Um roteador por palavras-chave chama as **tools reais** e formata o resultado. Não é um modelo de linguagem, e toda resposta avisa isso. A qualidade de conversa da Lia só aparece com o modelo real; veja os [exemplos](examples/conversas/).
 
@@ -121,7 +121,7 @@ Lia (lembrete, qua 25/03 10:30): Oi! Ficou alguma dúvida sobre os violões que 
 
 No Git Bash do Windows, o modo `-m "/esperar 1d"` precisa de `MSYS_NO_PATHCONV=1`, porque o shell converte argumentos começando com `/` em caminhos de arquivo. No modo interativo isso não acontece.
 
-Um achado da implementação: as respostas vazias ocasionais do modelo vinham do **raciocínio estendido**, que gastava todos os tokens de saída (`finish_reason=length`). A decisão de retenção desliga o raciocínio (só quando o modelo aceita o parâmetro com ZDR) e acertou 12/12 nos cenários com o modelo real, em menos de 1,5 s. O agente principal ainda usa o padrão do modelo e trata a resposta vazia com uma nova tentativa.
+Um achado da implementação: as respostas vazias ocasionais do modelo vinham do **raciocínio estendido**, que gastava todos os tokens de saída (`finish_reason=length`). A decisão de retenção desliga o raciocínio (só quando o modelo aceita o parâmetro com ZDR) e acertou 12/12 nos cenários com o modelo real, em menos de 1,5 s. No agente principal, o mesmo ajuste foi medido e **descartado** (decisão D-13, abaixo).
 
 A especificação completa (escopo, 26 regras numeradas, casos de borda e 19 critérios de aceite) está em [docs/specs/SPEC-001-agente-atendimento.md](docs/specs/SPEC-001-agente-atendimento.md); as decisões, em formato curto, em [docs/decisoes.md](docs/decisoes.md).
 
@@ -153,6 +153,14 @@ Function calling com um único agente num loop curto, e todas as regras de negó
 | `anthropic/claude-haiku-5.5` | 10/10 | 10/10 | 4,9 s | correto e cuidadoso; o mais lento e o mais caro |
 
 - **Um achado da Fase 0 que mudou o código.** Com `require_parameters`, enviar um parâmetro que nenhum endpoint ZDR suporta derruba a chamada com 404 ("No endpoints found"): o Haiku 5.5 não aceita `temperature`, e o Luna não aceita nem `max_tokens`. O cliente consulta a lista pública de endpoints ZDR ao iniciar e só envia o que o modelo aceita.
+- **Raciocínio estendido: ligado no agente, desligado na retenção** (D-13). Medido nos evals, 3 repetições cada:
+
+| Agente principal | Aprovados | Latência | Respostas vazias |
+|---|---|---|---|
+| Raciocínio ligado (padrão) | **126/126** | 2,7 s | 0 |
+| Raciocínio desligado | 116/126 | 2,2 s | 0 |
+
+  Sem raciocínio, o modelo não inventou nada (zero falhas críticas), mas ficou menos útil: em vez de consultar a política de defeito ou de troca, só pedia mais dados, e respondia o telefone a partir do prompt, sem chamar a tool. A opção fica em `LLM_RACIOCINIO` para experimentação. Na retenção, uma decisão curta em JSON, o raciocínio desligado eliminou as respostas vazias.
 - **Custo:** cerca de US$ 0,0004 por conversa curta. Os 126 casos da avaliação custaram US$ 0,04.
 
 ### Recuperação das políticas: BM25 por seção, sem banco vetorial

@@ -109,6 +109,8 @@ class Resultado:
     criticas: list[str] = field(default_factory=list)
     latencia_s: float = 0.0
     custo_usd: float = 0.0
+    tokens: int = 0
+    vazias: int = 0
     erro: str | None = None
 
     @property
@@ -132,6 +134,8 @@ def rodar_caso(config: Config, caso: Caso) -> Resultado:
                 brutas.append(r.texto_bruto)
                 res.tools += [e.tool for e in r.rastro]
                 res.custo_usd += r.custo_usd
+                res.tokens += r.tokens_entrada + r.tokens_saida
+                res.vazias += r.respostas_vazias
                 cliente += "\n" + turno
                 fontes_tools += "\n" + "\n".join(e.completo for e in r.rastro)
                 if r.segura:

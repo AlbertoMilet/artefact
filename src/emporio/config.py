@@ -33,6 +33,7 @@ class Config:
     history_window: int = 10
     tickets_path: Path = RAIZ / "tickets.jsonl"
     retencao: ConfigRetencao = ConfigRetencao()
+    raciocinio: bool = True                      # LLM_RACIOCINIO: raciocínio estendido do modelo no agente
 
     @classmethod
     def do_ambiente(cls, env_file: Path | None = RAIZ / ".env") -> "Config":
@@ -52,6 +53,7 @@ class Config:
             max_tool_calls=int(os.getenv("MAX_TOOL_CALLS", "5")),
             turn_timeout_s=float(os.getenv("TURN_TIMEOUT_S", "30")),
             history_window=int(os.getenv("HISTORY_WINDOW", "10")),
+            raciocinio=os.getenv("LLM_RACIOCINIO", "true").strip().lower() != "false",
             tickets_path=Path(os.getenv("TICKETS_PATH", str(RAIZ / "tickets.jsonl"))),
             retencao=ConfigRetencao(
                 ativa=os.getenv("RETENCAO_ATIVA", "false").strip().lower() == "true",
@@ -81,7 +83,7 @@ def montar_agente(config: Config | None = None, llm: LLMClient | None = None) ->
     toolbox = Toolbox(carregar(config.data_dir), carregar_manual(), relogio, tickets_path=config.tickets_path)
     llm = llm or montar_llm(config)
     return Agente(llm, toolbox, config.max_tool_calls, config.turn_timeout_s, config.history_window,
-                  retencao=Retencao(llm, config.retencao))
+                  retencao=Retencao(llm, config.retencao), raciocinio=config.raciocinio)
 
 
 __all__ = ["Config", "FakeLLMClient", "montar_agente", "montar_llm"]

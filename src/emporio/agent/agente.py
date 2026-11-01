@@ -60,6 +60,7 @@ class RespostaTurno:
     segura: bool = False              # True quando caiu na resposta segura
     motivo_segura: str | None = None
     texto_bruto: str = ""             # texto do modelo antes da máscara (só em memória: evals)
+    respostas_vazias: int = 0         # respostas vazias do modelo neste turno (diagnóstico)
 
 
 def _resumir(resultado: dict, limite: int = 400) -> str:
@@ -88,8 +89,10 @@ def _mascarar_mensagem(m: dict) -> dict:
 
 class Agente:
     def __init__(self, llm: LLMClient, toolbox: Toolbox, max_tool_calls: int = 5,
-                 timeout_turno_s: float = 30, janela_turnos: int = 10, retencao: Retencao | None = None):
+                 timeout_turno_s: float = 30, janela_turnos: int = 10, retencao: Retencao | None = None,
+                 raciocinio: bool = True):
         self.llm = llm
+        self.raciocinio = raciocinio       # False: pede ao modelo para não usar raciocínio estendido
         self.retencao = retencao
         self.toolbox = toolbox
         self.max_tool_calls = max_tool_calls
@@ -130,7 +133,8 @@ class Agente:
                     resp.motivo_segura = "tempo_limite"
                     break
                 limite = chamadas >= self.max_tool_calls or vazias > 0
-                r: RespostaLLM = self.llm.completar(mensagens(), tools, forcar_texto=limite)
+                r: RespostaLLM = self.llm.completar(mensagens(), tools, forcar_texto=limite,
+                                                    sem_raciocinio=not self.raciocinio)
                 resp.tokens_entrada += r.uso.tokens_entrada
                 resp.tokens_saida += r.uso.tokens_saida
                 resp.custo_usd += r.uso.custo_usd
@@ -139,6 +143,8 @@ class Agente:
                     break
                 if not r.tool_calls or limite:
                     texto_final = (r.texto or "").strip() or None
+                    if texto_final is None:
+                        resp.respostas_vazias += 1
                     if texto_final is None and vazias == 0:
                         vazias = 1            # resposta vazia: pede o texto mais uma vez (Fase 5)
                         continue

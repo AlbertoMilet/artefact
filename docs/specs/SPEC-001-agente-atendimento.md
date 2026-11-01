@@ -266,6 +266,7 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 | D-10 | Modelo: `deepseek/deepseek-v4.1-flash` via OpenRouter com ZDR; alternativa testada: `openai/gpt-6-luna` | Fase 0 (`docs/fase0-modelos.md`): os 3 candidatos acertaram 10/10 em tool e fato. O DeepSeek teve o tom mais próximo da §7.1, a menor latência (2,5 s), custo baixo, suporte a `temperature` (evals reproduzíveis, Q 5.4) e mais de 30 endpoints ZDR (resiliência). O Luna recusou um prompt injection em inglês e de forma robótica; o Haiku foi o mais lento e o mais caro. Amostra pequena (10 chamadas por modelo): os evals da Fase 5 confirmam ou revertem a escolha. Ressalva: o DeepSeek ofereceu "reservar" um produto; o system prompt proíbe prometer ações que o agente não executa |
 | D-11 | Tools `calcular_frete` e `consultar_promocoes` | Revisão final do Codex: a regra de frete estava testada mas fora do fluxo do agente, e campanhas eram respondidas sem consultar o CSV |
 | D-12 | Registro de solicitação em dois passos com estado na sessão | Revisão final do Codex: a confirmação era só o modelo enviando `confirmado=true` |
+| D-13 | Raciocínio estendido ligado no agente (`LLM_RACIOCINIO=true`) | Medido nos evals (3 repetições): ligado 126/126 e 2,7 s; desligado 116/126 e 2,2 s, porque sem raciocínio o modelo deixava de consultar tools de política e de loja. Nenhuma resposta vazia com o padrão. Na retenção (SPEC-002) o raciocínio fica desligado |
 
 ### Pendências (não inventar no código)
 

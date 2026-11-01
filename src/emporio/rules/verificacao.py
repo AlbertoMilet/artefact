@@ -69,7 +69,9 @@ def mascarar_texto(texto: str) -> str:
     """Mascara e-mails e telefones de clientes em texto livre (logs, --debug, histórico, exportações)."""
     def email(m):
         e = m.group()
-        return e if e.lower() in EMAILS_PUBLICOS else mascarar_email(e)
+        nucleo = e.rstrip(".")                 # ponto final da frase não faz parte do e-mail
+        sufixo = e[len(nucleo):]
+        return e if nucleo.lower() in EMAILS_PUBLICOS else mascarar_email(nucleo) + sufixo
 
     def tel(m):
         return m.group() if _digitos(m.group()) in CONTATOS_PUBLICOS_DIGITOS else mascarar_telefone(m.group())
