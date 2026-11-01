@@ -14,6 +14,7 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 
 1. [Como rodar](#como-rodar)
 2. [Arquitetura](#arquitetura)
+   - [Inatividade na janela de 24 h (retenção)](#inatividade-na-janela-de-24-h-retenção)
 3. [Decisões técnicas](#decisões-técnicas)
 4. [Estratégia de prompt](#estratégia-de-prompt)
 5. [Tratamento dos dados e suposições](#tratamento-dos-dados-e-suposições)
@@ -42,12 +43,13 @@ uv run python -m emporio chat -m "Qual o endereço?" -m "Estão abertos agora?" 
 
 | Comando | O que faz |
 |---|---|
-| `uv run pytest` | 110 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
+| `uv run pytest` | 149 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
 | `uv run pytest -m llm` | evals com o modelo real como teste (critérios CA-16 a CA-18) |
 | `uv run python -m evals.rodar --repeticoes 3` | avaliação completa com o modelo real e relatório em `docs/avaliacao.md` |
 | `uv run python scripts/gerar_exemplos.py` | regenera os exemplos de conversa em `examples/conversas/` |
 | `uv run python scripts/perfil_dados.py` | confirma os 19 achados nos dados e gera `docs/data_quality.md` |
 | `uv run python scripts/comparar_modelos.py` | compara modelos com ZDR e gera `docs/fase0-modelos.md` |
+| `uv run python -m emporio chat --retencao` | liga a retenção por inatividade (SPEC-002): `/esperar 30m`, `/janela` |
 
 **Variáveis do `.env`** (todas em `.env.example`): `LLM_PROVIDER` (`openrouter` ou `fake`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, e as opcionais `DATA_REFERENCIA` (data e hora fixas, ISO 8601, para demonstrar prazos com os pedidos de 2026), `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10) e `EMPORIO_DATA_DIR` (pasta dos CSVs; o manual fica em `src/emporio/policies/manual.md`).
 
@@ -85,6 +87,41 @@ flowchart LR
 | `calcular_frete` | frete e prazo para uma cidade e um valor | grátis só acima de R$ 500,00; outras cidades sem valor (§5) |
 | `consultar_promocoes` | se uma campanha está ativa; promoções ativas | só `is_active`; preço promocional calculado |
 | `registrar_solicitacao` | reclamação, devolução, troca, atendimento humano (**simulado**) | dois passos: proposta num turno, confirmação num turno seguinte do cliente |
+
+### Inatividade na janela de 24 h (retenção)
+
+Funcionalidade da [SPEC-002](docs/specs/SPEC-002-inatividade-janela-24h.md), inspirada no agente de retenção de um projeto anterior meu (triagem jurídica pelo WhatsApp). Quando o cliente some no meio do atendimento, a Lia avalia em 30 min, 4 h e 21 h de silêncio se vale retomar, e decide **enviar** um lembrete curto e contextual, **esperar** ou **parar**.
+
+- **Janela de 24 h do WhatsApp:** conta só da última mensagem **do cliente**; lembretes não a reabrem. Nada é enviado nos últimos 30 min. Se o cliente voltar depois de a janela fechar, começa uma sessão nova e a verificação do pedido expira.
+- **Bloqueios em código, antes do modelo e de novo antes do envio:**
+  - pedido para não receber mensagens ("pare", "não quero mais receber"), detectado sem depender do modelo;
+  - no máximo 3 lembretes por silêncio;
+  - intervalo mínimo de 20 min;
+  - horário silencioso das 21h às 8h;
+  - última tentativa quando faltam até 4 h para a janela fechar;
+  - encerramento quando a equipe assume.
+- **Conferência do lembrete:** até 60 palavras e uma pergunta, nenhum valor em R$, nenhuma promessa (reserva, desconto) e nenhuma repetição. Lembrete reprovado não é enviado, e saída inválida do modelo vira "esperar".
+- **Desligada por padrão** (`RETENCAO_ATIVA=false`), porque falar por iniciativa própria é decisão explícita. No CLI:
+
+```bash
+uv run python -m emporio chat --retencao --debug       # e, na conversa: /esperar 30m, /esperar 1d, /janela
+```
+
+```text
+Você: Quais violões vocês têm até R$ 1000?
+Lia:  Achei esses violões até R$ 1.000: ... Quer ver mais?
+Você: /esperar 1d
+  [retenção qua 25/03 10:30] ENVIAR -> lembrete_enviado
+Lia (lembrete, qua 25/03 10:30): Oi! Ficou alguma dúvida sobre os violões que te mostrei? Me conta o que
+  você procura tocar que eu te ajudo a escolher 😊
+  [retenção qua 25/03 14:00] ESPERAR: já houve um lembrete sem resposta; insistir agora seria repetitivo
+  [retenção qui 26/03 08:00] ENVIAR -> ultima_tentativa      (7h cairia no horário silencioso)
+  [retenção qui 26/03 09:30] BLOQUEADO: janela_fechada
+```
+
+No Git Bash do Windows, o modo `-m "/esperar 1d"` precisa de `MSYS_NO_PATHCONV=1`, porque o shell converte argumentos começando com `/` em caminhos de arquivo. No modo interativo isso não acontece.
+
+Um achado da implementação: as respostas vazias ocasionais do modelo vinham do **raciocínio estendido**, que gastava todos os tokens de saída (`finish_reason=length`). A decisão de retenção desliga o raciocínio (só quando o modelo aceita o parâmetro com ZDR) e acertou 12/12 nos cenários com o modelo real, em menos de 1,5 s. O agente principal ainda usa o padrão do modelo e trata a resposta vazia com uma nova tentativa.
 
 A especificação completa (escopo, 26 regras numeradas, casos de borda e 19 critérios de aceite) está em [docs/specs/SPEC-001-agente-atendimento.md](docs/specs/SPEC-001-agente-atendimento.md); as decisões, em formato curto, em [docs/decisoes.md](docs/decisoes.md).
 
@@ -213,7 +250,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes automatizados (`uv run pytest`): 110, sem rede e sem chave.**
+**Testes automatizados (`uv run pytest`): 149, sem rede e sem chave.**
 - **Unidade:** regras e tools, com valores esperados escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; R$ 500,00 paga frete; arrependimento no 7.º dia elegível e no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a troca de pedido (que exige nova verificação), a resposta segura, o histórico mascarado e o payload com ZDR.
 
@@ -280,7 +317,7 @@ Cinco conversas reais com o DeepSeek, sem edição, com o rastro das tools em um
 
 **Com mais tempo:**
 - integração com a WhatsApp Cloud API, com o mesmo agente atrás de um webhook e o telefone como identificação;
-- persistência entre sessões e um painel para o atendimento humano assumir a conversa;
+- persistência entre sessões, agendador da retenção em produção (varredura a cada minuto, com o acompanhamento no banco) e um painel para o atendimento humano assumir a conversa;
 - encaminhamento real de solicitações;
 - uma CLI gerencial para a equipe;
 - busca híbrida (BM25 + embeddings) e reranking se o manual crescer;
@@ -337,6 +374,7 @@ src/emporio/
   tools/       as 9 tools (schemas e implementação) e o executor
   llm/         OpenRouterClient (ZDR), FakeLLMClient (testes), modo demonstração
   agent/       system prompt em camadas e loop do agente
+  retencao/    janela de 24 h, regras de inatividade e agente de retenção (SPEC-002)
   cli.py       python -m emporio chat
 evals/         casos, verificações críticas e runner com o modelo real
 tests/         unit/ (regras, tools, dados) · conversa/ (agente e CLI) · evals/ (pytest -m llm)

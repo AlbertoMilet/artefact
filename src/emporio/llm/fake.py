@@ -33,7 +33,8 @@ class FakeLLMClient:
         self.roteiro = list(roteiro or [])
         self.chamadas: list[dict] = []
 
-    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False) -> RespostaLLM:
+    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False,
+                  sem_raciocinio: bool = False) -> RespostaLLM:
         self.chamadas.append({"mensagens": [dict(m) for m in mensagens], "tools": [t["function"]["name"] for t in tools],
                               "forcar_texto": forcar_texto})
         if not self.roteiro:

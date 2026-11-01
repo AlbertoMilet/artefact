@@ -75,7 +75,8 @@ class OpenRouterClient:
             log.error("modelo %s sem endpoint ZDR com suporte a tools", modelo)
         self._cliente = cliente or OpenAI(base_url=BASE_URL, api_key=api_key, timeout=timeout, max_retries=1)
 
-    def montar_requisicao(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False) -> dict:
+    def montar_requisicao(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False,
+                          sem_raciocinio: bool = False) -> dict:
         """Argumentos de chat.completions.create. Separado para ser testado sem rede (CA-14)."""
         req: dict = {"model": self.modelo, "messages": mensagens,
                      "extra_body": {"provider": dict(PROVIDER), "usage": {"include": True}}}
@@ -90,13 +91,18 @@ class OpenRouterClient:
             req["max_tokens"] = MAX_SAIDA
         elif "max_completion_tokens" in s:
             req["extra_body"]["max_completion_tokens"] = MAX_SAIDA
+        if sem_raciocinio and "reasoning" in s:
+            # SPEC-002: com raciocínio, o DeepSeek às vezes gastava todos os tokens de saída deliberando
+            # (finish_reason=length, conteúdo vazio). A decisão de retenção é curta e em JSON.
+            req["extra_body"]["reasoning"] = {"enabled": False}
         return req
 
-    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False) -> RespostaLLM:
+    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False,
+                  sem_raciocinio: bool = False) -> RespostaLLM:
         if self.suportados == set():
             raise LLMIndisponivel(f"modelo {self.modelo} sem endpoint ZDR com tools")
         try:
-            r = self._cliente.chat.completions.create(**self.montar_requisicao(mensagens, tools, forcar_texto))
+            r = self._cliente.chat.completions.create(**self.montar_requisicao(mensagens, tools, forcar_texto, sem_raciocinio))
         except OpenAIError as e:
             raise LLMIndisponivel(f"{type(e).__name__}: {e}") from e
         if not r.choices:

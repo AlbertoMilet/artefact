@@ -134,6 +134,14 @@ def test_ca14_parametros_sem_suporte_nao_sao_enviados():
     assert "temperature" not in req and "max_tokens" not in req
 
 
+def test_sem_raciocinio_so_quando_suportado():
+    com = OpenRouterClient("sk-teste", "deepseek/x", parametros_suportados={"tools", "reasoning", "max_tokens"})
+    assert com.montar_requisicao([], [], sem_raciocinio=True)["extra_body"]["reasoning"] == {"enabled": False}
+    assert "reasoning" not in com.montar_requisicao([], [])["extra_body"]
+    sem = OpenRouterClient("sk-teste", "x/y", parametros_suportados={"tools", "max_tokens"})
+    assert "reasoning" not in sem.montar_requisicao([], [], sem_raciocinio=True)["extra_body"]
+
+
 def test_ca14_modelo_sem_endpoint_zdr_falha_sem_tentar_outro():
     cli = OpenRouterClient("sk-teste", "x/sem-zdr", parametros_suportados=set())
     with pytest.raises(LLMIndisponivel):

@@ -79,6 +79,23 @@ def relogio_fixo(momento: datetime) -> Relogio:
     return lambda: fixo
 
 
+class RelogioAjustavel:
+    """Relógio que pode ser adiantado (simulação de silêncio no CLI e nos testes, SPEC-002)."""
+
+    def __init__(self, base: Relogio):
+        self.base = base
+        self.deslocamento = timedelta()
+
+    def __call__(self) -> datetime:
+        return (self.base() + self.deslocamento).astimezone(FUSO)
+
+    def avancar(self, delta: timedelta) -> None:
+        self.deslocamento += delta
+
+    def ir_para(self, momento: datetime) -> None:
+        self.deslocamento += momento - self()
+
+
 def _local(dt: datetime) -> datetime:
     return dt.astimezone(FUSO) if dt.tzinfo else dt.replace(tzinfo=FUSO)
 

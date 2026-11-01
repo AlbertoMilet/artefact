@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 
 from emporio.agent.prompt import AVISO_PRIVACIDADE, montar_prompt
 from emporio.llm.base import LLMClient, LLMIndisponivel, RespostaLLM
+from emporio.retencao import janela as janela_24h
+from emporio.retencao.agente import Retencao
+from emporio.retencao.modelos import Acompanhamento
 from emporio.rules.verificacao import mascarar_texto
 from emporio.tools.toolbox import LOJA, Sessao, Toolbox
 
@@ -43,6 +46,7 @@ class Conversa:
     historico: list[dict] = field(default_factory=list)   # sem system; já mascarado
     sessao: Sessao = field(default_factory=Sessao)
     turnos: int = 0
+    acompanhamento: Acompanhamento = field(default_factory=Acompanhamento)   # SPEC-002
 
 
 @dataclass
@@ -84,8 +88,9 @@ def _mascarar_mensagem(m: dict) -> dict:
 
 class Agente:
     def __init__(self, llm: LLMClient, toolbox: Toolbox, max_tool_calls: int = 5,
-                 timeout_turno_s: float = 30, janela_turnos: int = 10):
+                 timeout_turno_s: float = 30, janela_turnos: int = 10, retencao: Retencao | None = None):
         self.llm = llm
+        self.retencao = retencao
         self.toolbox = toolbox
         self.max_tool_calls = max_tool_calls
         self.timeout_turno_s = timeout_turno_s
@@ -99,6 +104,16 @@ class Agente:
         primeira = conversa.turnos == 0
         conversa.turnos += 1
         conversa.sessao.turno = conversa.turnos
+        agora = self.toolbox.relogio()
+        ac = conversa.acompanhamento
+        if ac.ultima_msg_cliente is not None and not janela_24h.aberta(ac.ultima_msg_cliente, agora):
+            # Voltou depois de a janela de 24 h fechar: sessão nova (SPEC-002 RI-12)
+            conversa.sessao.pedido_verificado = None
+            conversa.sessao.registro_proposto = None
+        if self.retencao is not None:
+            self.retencao.ao_receber(ac, texto_cliente, agora)
+        else:
+            ac.ultima_msg_cliente = agora
         system = {"role": "system", "content": montar_prompt(self.toolbox.relogio())}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
@@ -164,6 +179,8 @@ class Agente:
         conversa.historico.extend(_mascarar_mensagem(m) for m in novas)
 
         resp.texto_bruto = texto_final
+        if self.retencao is not None:
+            self.retencao.ao_responder(ac, self.toolbox.relogio(), conversa.sessao.atendimento_humano)
         visivel = mascarar_texto(texto_final)      # o cliente nunca vê contato completo de cliente (RN-09)
         resp.texto = f"{visivel}\n\n{AVISO_PRIVACIDADE}" if primeira else visivel
         resp.latencia_s = time.perf_counter() - inicio

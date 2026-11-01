@@ -69,6 +69,7 @@ class Sessao:
     pedido_verificado: int | None = None
     registros: list[str] = field(default_factory=list)
     turno: int = 0                              # turno atual do cliente (o agente atualiza)
+    atendimento_humano: bool = False            # solicitação de atendimento humano registrada (SPEC-002 RI-11)
     registro_proposto: dict | None = None       # resumo preparado e ainda não confirmado (§4.3 da spec)
 
 
@@ -372,6 +373,8 @@ class Toolbox:
             return {"gravado": False, "orientacao": "Antes de gravar, chame com confirmado=false, mostre o resumo e "
                                                     "espere o cliente confirmar numa nova mensagem."}
         sessao.registro_proposto = None
+        if a.tipo == "atendimento_humano":
+            sessao.atendimento_humano = True
         agora = self.relogio()
         existentes = 0
         if self.tickets_path.exists():

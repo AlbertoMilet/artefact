@@ -44,6 +44,8 @@ class RespostaLLM:
 class LLMClient(Protocol):
     modelo: str
 
-    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False) -> RespostaLLM:
-        """forcar_texto: o modelo deve responder em texto, sem pedir tools (limite do turno)."""
+    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False,
+                  sem_raciocinio: bool = False) -> RespostaLLM:
+        """forcar_texto: responder em texto, sem pedir tools (limite do turno).
+        sem_raciocinio: desliga o raciocínio estendido, quando o modelo permite (tarefas curtas em JSON)."""
         ...

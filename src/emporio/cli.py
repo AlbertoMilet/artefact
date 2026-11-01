@@ -6,6 +6,8 @@
     python -m emporio chat -m "oi" -m "qual o endereço?"   mensagens em sequência, sem interação
 
 Comandos durante a conversa: /novo (recomeça), /sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
+Com --retencao (SPEC-002): /esperar 30m | 4h | 1d simula o silêncio do cliente e mostra os lembretes;
+/janela mostra a situação da janela de 24 h.
 """
 
 from __future__ import annotations
@@ -13,14 +15,18 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 
 from emporio.agent import Agente, Conversa, RespostaTurno
 from emporio.config import RAIZ, Config, montar_agente
 from emporio.data import DadosIndisponiveis
 from emporio.llm import LLMIndisponivel
+from emporio.retencao import janela as janela_24h
+from emporio.rules.horario import FUSO
 
 CORES = sys.stdout.isatty() and os.getenv("NO_COLOR") is None
 
@@ -65,10 +71,71 @@ def mostrar(resp: RespostaTurno, debug: bool, saida=None) -> None:
     print(f"{_cor('Lia:', '1;35')} {resp.texto}\n", file=saida)
 
 
+DIAS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def _quando(dt) -> str:
+    local = dt.astimezone(FUSO)
+    return f"{DIAS[local.weekday()]} {local:%d/%m %H:%M}"
+
+
+def duracao(texto: str) -> timedelta | None:
+    m = re.fullmatch(r"\s*(\d+)\s*(m|min|h|d)?\s*", texto.lower())
+    if not m:
+        return None
+    n, unidade = int(m.group(1)), m.group(2) or "m"
+    return {"m": timedelta(minutes=n), "min": timedelta(minutes=n), "h": timedelta(hours=n), "d": timedelta(days=n)}[unidade]
+
+
+def esperar(agente: Agente, conversa: Conversa, arg: str, debug: bool) -> None:
+    """Avança o relógio simulado e roda as avaliações de inatividade que vencerem no caminho."""
+    delta = duracao(arg)
+    if delta is None:
+        print(_cor("Uso: /esperar 30m | 4h | 1d\n", "2"))
+        return
+    relogio, ret = agente.toolbox.relogio, agente.retencao
+    if not hasattr(relogio, "ir_para"):
+        print(_cor("(relógio não ajustável nesta configuração)\n", "2"))
+        return
+    destino = relogio() + delta
+    if ret is None or not ret.cfg.ativa:
+        relogio.ir_para(destino)
+        print(_cor(f"(+{arg}: agora {_quando(destino)}; retenção desligada, use --retencao)\n", "2"))
+        return
+    ac = conversa.acompanhamento
+    for _ in range(30):
+        if ac.proxima_avaliacao is None or ac.proxima_avaliacao > destino:
+            break
+        relogio.ir_para(max(ac.proxima_avaliacao, relogio()))
+        av = ret.avaliar(ac, conversa.historico, relogio())
+        if av is None:
+            break
+        if debug or av.acao != "ENVIAR":
+            print(_cor(f"  [retenção {_quando(av.quando)}] {av.acao}: {av.motivo} -> {av.status}", "2"))
+        if av.mensagem:
+            print(f"{_cor('Lia (lembrete, ' + _quando(av.quando) + '):', '1;35')} {av.mensagem}\n")
+    relogio.ir_para(destino)
+    print(_cor(f"(agora {_quando(destino)}; {janela_24h.rotulo(ac.ultima_msg_cliente, destino)})\n", "2"))
+
+
+def mostrar_janela(agente: Agente, conversa: Conversa) -> None:
+    ac, agora = conversa.acompanhamento, agente.toolbox.relogio()
+    proxima = _quando(ac.proxima_avaliacao) if ac.proxima_avaliacao else "nenhuma"
+    print(_cor(f"{janela_24h.rotulo(ac.ultima_msg_cliente, agora)} | acompanhamento: {ac.status.value}"
+               f"{' (' + ac.motivo + ')' if ac.motivo else ''} | lembretes neste silêncio: {len(ac.lembretes)} | "
+               f"próxima avaliação: {proxima}\n", "2"))
+
+
 def conversar(agente: Agente, mensagens: list[str] | None, debug: bool) -> int:
     conversa: Conversa = agente.nova_conversa()
     if mensagens:
         for m in mensagens:
+            if m.lower().startswith("/esperar"):
+                esperar(agente, conversa, m[len("/esperar"):], debug)
+                continue
+            if m.lower() == "/janela":
+                mostrar_janela(agente, conversa)
+                continue
             print(f"{_cor('Você:', '1;36')} {m}")
             mostrar(agente.responder(conversa, m), debug)
         return 0
@@ -83,6 +150,12 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool) -> int:
             continue
         if texto.lower() in ("/sair", "sair", "/exit", "/quit"):
             return 0
+        if texto.lower().startswith("/esperar"):
+            esperar(agente, conversa, texto[len("/esperar"):], debug)
+            continue
+        if texto.lower() == "/janela":
+            mostrar_janela(agente, conversa)
+            continue
         if texto.lower() == "/novo":
             conversa = agente.nova_conversa()
             print(_cor("(nova conversa)\n", "2"))
@@ -100,7 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")
     chat.add_argument("--modelo", help="sobrescreve OPENROUTER_MODEL")
-    chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir)")
+    chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir; aceita /esperar e /janela)")
+    chat.add_argument("--retencao", action="store_true", help="liga a retenção por inatividade (SPEC-002)")
     a = ap.parse_args(argv)
 
     configurar_log(RAIZ / "logs")
@@ -109,6 +183,8 @@ def main(argv: list[str] | None = None) -> int:
         config = replace(config, llm_provider="fake")
     if a.modelo:
         config = replace(config, openrouter_model=a.modelo)
+    if a.retencao:
+        config = replace(config, retencao=replace(config.retencao, ativa=True))
     try:
         agente = montar_agente(config)
     except DadosIndisponiveis as e:

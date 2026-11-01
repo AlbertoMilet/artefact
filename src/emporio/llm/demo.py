@@ -76,7 +76,8 @@ def _formatar(nome: str, r: dict) -> str:
 class DemoLLMClient:
     modelo = "demo/sem-llm"
 
-    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False) -> RespostaLLM:
+    def completar(self, mensagens: list[dict], tools: list[dict], forcar_texto: bool = False,
+                  sem_raciocinio: bool = False) -> RespostaLLM:
         ultima = mensagens[-1]
         if ultima["role"] == "tool":
             chamada = next(m for m in reversed(mensagens) if m.get("tool_calls"))
