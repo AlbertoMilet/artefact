@@ -1,6 +1,6 @@
 # SPEC-001: Agente de atendimento da Empório da Música
 
-- **Status:** rascunho (rev. 3): Fase 0 concluída; modelo escolhido (D-10)
+- **Status:** em implementação (rev. 4): Fases 0 e 1 concluídas
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Local:** `docs/specs/`
@@ -118,7 +118,7 @@ Situação do produto, vista pelo cliente:
 | RN-04 | Promoção perguntada e inativa: "não está ativa no sistema", mais o preço atual, sem dizer quando terminou | §7.3, A13 |
 | RN-05 | Filtro "até R$ X" compara com o melhor preço à vista válido (promocional ou PIX) e informa qual condição atende ao filtro | Q 6.7 |
 | RN-06 | Parcelamento: vale a §3.1 (até 3x, parcela ≥ R$ 50; 4x–6x, parcela ≥ R$ 80; 7x–12x, parcela ≥ R$ 100), sobre o preço final no cartão (promocional ou de tabela, nunca o do PIX). `detalhar_produto` devolve o maior número de parcelas permitido e o valor da parcela; o valor é truncado em centavos e a diferença vai na primeira parcela. Produto abaixo de R$ 50 não parcela. O conflito com a tabela da §3 é documentado | §3.1, A3, D-09 |
-| RN-07 | Frete na região metropolitana: grátis só **acima** de R$ 500,00 sobre o valor final; R$ 500,00 exatos ou menos pagam R$ 35,00. Fora de Campo Grande: só modalidades e prazos da §5.2 | §5.1, A14 |
+| RN-07 | Frete na região metropolitana: grátis só **acima** de R$ 500,00 sobre o valor final; R$ 500,00 exatos ou menos pagam R$ 35,00. Fora de Campo Grande: só modalidades e prazos da §5.2. Suposição: só o município de Campo Grande conta como região metropolitana, porque o manual não lista os municípios | §5.1, A14 |
 | RN-08 | Pedido só é mostrado com número + telefone ou e-mail que conferem com o cadastro, verificado em código; a autorização vale para um pedido por sessão | §9, A17 |
 | RN-09 | O agente nunca lista pedidos por nome, nunca devolve dados de outro cliente e nunca exibe telefone ou e-mail completos | §9 |
 | RN-10 | Arrependimento: elegível se `status=delivered`, compra **online** e no máximo 7 dias corridos desde a data de recebimento **informada pelo cliente**. `estimated_delivery` nunca serve para negar | §4.1, A15 |
@@ -128,7 +128,7 @@ Situação do produto, vista pelo cliente:
 | RN-14 | Vários produtos para um nome genérico viram uma lista curta para o cliente escolher; o agente não escolhe sozinho | A18, ALJ RB-08 |
 | RN-15 | Produto fora do CSV: "não encontrei esse produto disponível no nosso sistema agora"; havendo alternativa semelhante no CSV, oferecê-la com a diferença, usando só dados cadastrados; sem alternativa, oferecer contato com a equipe. Nunca afirmar que a loja não vende a categoria | Q 6.5, A12 |
 | RN-16 | Contatos: telefone/WhatsApp (67) 3341-4444; e-mail `contato@emporiodamusica.com.br` | A1, A2 |
-| RN-17 | Horário: seg–sex 9h–18h, sáb 9h–13h, domingo e feriados fechado, fuso `America/Campo_Grande`; feriados e horários especiais vêm de configuração | §2 |
+| RN-17 | Horário: seg–sex 9h–18h, sáb 9h–13h, domingo e feriados fechado, fuso `America/Campo_Grande`; feriados e horários especiais vêm de configuração. Padrão: nacionais fixos, Sexta-feira Santa, 11/10 (MS), 13/06 e 26/08 (Campo Grande), a conferir com o calendário oficial | §2 |
 | RN-18 | Acessórios: a loja trabalha só com instrumentos; o agente sugere procurar lojas parceiras (sem nomes) e oferece contato com a equipe | §1, §7.1, Q 9.3, Q 10.2 |
 | RN-19 | Fora de escopo: recusa curta e traz a conversa de volta à loja; música ligada à escolha de produto: no máximo 2 frases | Q 9.1, 9.2 |
 | RN-20 | Atendimento humano é oferecido quando o cliente pede, em reclamação, em dúvida que a §10 manda levar à gerência, em acessórios e depois de 2 falhas de entendimento; o agente continua disponível | Q 10.2 |
@@ -226,17 +226,17 @@ Situação do produto, vista pelo cliente:
 
 Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um eval (E = LLM real).
 
-- [ ] **CA-01 (U)** Dado o produto 95 sem promoção ativa, quando `preco_final` é calculado, então final = R$ 2.199,00 e PIX = R$ 2.089,05.
-- [ ] **CA-02 (U)** Dado o produto 121 com a promoção 14 (20%) ativa, quando `preco_final` é calculado, então final = R$ 439,20 e PIX = nulo.
-- [ ] **CA-03 (U)** Dado R$ 500,00 em Campo Grande, quando `frete` é calculado, então R$ 35,00; dado R$ 500,01, então R$ 0,00.
-- [ ] **CA-04 (U)** Dado um pedido `delivered`, online, recebido há 7 dias, quando `elegivel_arrependimento` roda, então elegível; com 8 dias ou canal "loja", então não elegível com as alternativas da RN-11.
-- [ ] **CA-05 (U)** Dado o pedido 8 e um telefone diferente do cadastro do cliente 2, quando `verificar_dono` roda, então não autorizado; com o telefone correto, autorizado.
-- [ ] **CA-06 (U)** Dado `parcelamento(R$ 349,90, 6x)`, então recusado (R$ 58,32 < R$ 80); dado `parcelamento(R$ 159,90, 3x)`, então aceito.
-- [ ] **CA-19 (U)** Dado o produto 95 (R$ 2.199,00), quando `parcelamento` calcula o máximo, então 12x de R$ 183,25; dado R$ 159,90, então 3x de R$ 53,30; dado R$ 45,00, então sem parcelamento (1x).
-- [ ] **CA-07 (U)** Dado "takamine gd 20" (caixa baixa, espaço), quando `buscar_produtos` roda, então o primeiro resultado é o 95; dado "takamine", então 4 resultados.
-- [ ] **CA-08 (U)** Dado `preco_max=1000` e categoria Violões, quando `buscar_produtos` roda com `so_disponiveis`, então nenhum produto sem estoque ou não `active` aparece, e todos têm melhor preço à vista ≤ R$ 1.000.
-- [ ] **CA-09 (U)** Dado o produto 136, quando `disponibilidade` roda, então "descontinuado", apesar do estoque 13.
-- [ ] **CA-10 (U)** Dado um CSV de produtos ausente, a inicialização falha com mensagem clara; dada uma linha com `specs` inválido, ela é descartada e registrada no log.
+- [x] **CA-01 (U)** Dado o produto 95 sem promoção ativa, quando `preco_final` é calculado, então final = R$ 2.199,00 e PIX = R$ 2.089,05.
+- [x] **CA-02 (U)** Dado o produto 121 com a promoção 14 (20%) ativa, quando `preco_final` é calculado, então final = R$ 439,20 e PIX = nulo.
+- [x] **CA-03 (U)** Dado R$ 500,00 em Campo Grande, quando `frete` é calculado, então R$ 35,00; dado R$ 500,01, então R$ 0,00.
+- [x] **CA-04 (U)** Dado um pedido `delivered`, online, recebido há 7 dias, quando `elegivel_arrependimento` roda, então elegível; com 8 dias ou canal "loja", então não elegível com as alternativas da RN-11.
+- [x] **CA-05 (U)** Dado o pedido 8 e um telefone diferente do cadastro do cliente 2, quando `verificar_dono` roda, então não autorizado; com o telefone correto, autorizado.
+- [x] **CA-06 (U)** Dado `parcelamento(R$ 349,90, 6x)`, então recusado (R$ 58,32 < R$ 80); dado `parcelamento(R$ 159,90, 3x)`, então aceito.
+- [x] **CA-19 (U)** Dado o produto 95 (R$ 2.199,00), quando `parcelamento` calcula o máximo, então 12x de R$ 183,25; dado R$ 159,90, então 3x de R$ 53,30; dado R$ 45,00, então sem parcelamento (1x).
+- [x] **CA-07 (U)** Dado "takamine gd 20" (caixa baixa, espaço), quando `buscar_produtos` roda, então o primeiro resultado é o 95; dado "takamine", então 4 resultados.
+- [x] **CA-08 (U)** Dado `preco_max=1000` e categoria Violões, quando `buscar_produtos` roda com `so_disponiveis`, então nenhum produto sem estoque ou não `active` aparece, e todos têm melhor preço à vista ≤ R$ 1.000.
+- [x] **CA-09 (U)** Dado o produto 136, quando `disponibilidade` roda, então "descontinuado", apesar do estoque 13.
+- [x] **CA-10 (U)** Dado um CSV de produtos ausente, a inicialização falha com mensagem clara; dada uma linha com `specs` inválido, ela é descartada e registrada no log.
 - [ ] **CA-11 (C)** Dada uma conversa roteirizada em que o cliente verifica o pedido 5 e depois pede o 12, então a tool do 12 não é executada sem nova verificação.
 - [ ] **CA-12 (C)** Dado que o LLM falso pede uma tool inexistente duas vezes, então o turno termina com a resposta segura, sem stack trace.
 - [ ] **CA-13 (C)** Dado que o cliente recusa o resumo do registro, então nada é gravado em `tickets.jsonl`.
