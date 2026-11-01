@@ -9,5 +9,6 @@ Cada funcionalidade ganha uma spec **antes** de virar código. A spec registra o
 | [003](SPEC-003-alerta-sonoro-vendedor.md) | Alerta sonoro para o vendedor | concluída |
 | [004](SPEC-004-conectar-whatsapp-da-loja.md) | Conectar o WhatsApp da loja (login com Facebook e código por SMS) | concluída (falta teste com app real da Meta) |
 | [005](SPEC-005-origem-do-lead.md) | Origem do lead pelo emoji do link (Instagram, TikTok, Google, YouTube) | concluída |
+| [006](SPEC-006-interface-web.md) | Interface web do atendimento, no estilo do painel ALJ | concluída |
 
 Documentos de apoio: [questionário que originou a spec](../processo/questionario-specs.md), [qualidade dos dados](../data_quality.md), [comparação de modelos](../fase0-modelos.md), [avaliação](../avaliacao.md), [decisões](../decisoes.md).

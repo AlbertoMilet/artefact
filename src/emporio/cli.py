@@ -1,6 +1,7 @@
 """CLI do agente (SPEC-001 Fase 4).
 
-    python -m emporio chat                 conversa interativa
+    python -m emporio                      interface web do atendimento (SPEC-006); `ui --fake` sem chave
+    python -m emporio chat                 conversa no terminal
     python -m emporio chat --debug         mostra tools chamadas, argumentos e resultado (mascarados)
     python -m emporio chat --fake          modo demonstração, sem chave nem modelo de linguagem
     python -m emporio chat -m "oi" -m "qual o endereço?"   mensagens em sequência, sem interação
@@ -255,7 +256,10 @@ def main(argv: list[str] | None = None) -> int:
     for fluxo in (sys.stdout, sys.stderr):
         if hasattr(fluxo, "reconfigure"):
             fluxo.reconfigure(encoding="utf-8")
-    argv = list(sys.argv[1:] if argv is None else argv)
+    argv = list(sys.argv[1:] if argv is None else argv) or ["ui"]     # sem argumentos: a interface web
+    if argv[:1] == ["ui"]:
+        from emporio import cli_web
+        return cli_web.main(argv[1:])
     if argv[:1] == ["configurar"]:
         return cli_config.configurar(argv[1:])
     if argv[:1] == ["vendedor"]:
@@ -272,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("vendedor", help="vigia de alertas para o vendedor (outro terminal)")
     sub.add_parser("whatsapp", help="conecta o WhatsApp da loja: login com Facebook e código por SMS (SPEC-004)")
     sub.add_parser("origem", help="links por canal e relatório de origem dos leads (SPEC-005)")
+    sub.add_parser("ui", help="interface web do atendimento (padrão sem argumentos; SPEC-006)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")

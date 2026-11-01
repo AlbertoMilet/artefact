@@ -1,0 +1,22 @@
+{# Fila de alertas do vendedor, mais recentes primeiro; trocada a cada 2 s. #}
+<div id="alertas" hx-get="/vendedor/alertas" hx-trigger="every 2s" hx-swap="outerHTML">
+  {% if alertas %}
+  <div class="list-group">
+    {% for a in alertas %}
+    <div class="list-group-item alerta-item" data-id="{{ a.id }}" data-tipo="{{ a.tipo }}" data-tocar="{{ '1' if a.tocar else '0' }}">
+      <div class="d-flex flex-wrap justify-content-between gap-2">
+        <strong>{% if a.tipo == "pedido_vendedor" %}Cliente pediu um vendedor{% else %}Solicitação encaminhada: {{ a.motivo }}{% endif %}</strong>
+        <span class="small text-body-secondary">{{ a.hora }}</span>
+      </div>
+      <div class="small">
+        {% if a.protocolo %}Protocolo {{ a.protocolo }} · {% endif %}conversa {{ a.conversa }}
+        {% if a.origem_rotulo %} · <span class="badge canal">{{ a.origem_rotulo }}</span>{% endif %}
+      </div>
+      {% if a.trecho %}<div class="small text-body-secondary">"{{ a.trecho }}"</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-body-secondary small">Nenhum alerta ainda. Na tela de atendimento, peça um vendedor para ver um chegar aqui.</p>
+  {% endif %}
+</div>

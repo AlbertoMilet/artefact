@@ -1,0 +1,89 @@
+{# Conversa e painel lateral; trocado inteiro a cada mensagem (HTMX). #}
+<div id="painel" class="row g-4">
+  <div class="col-lg-8">
+    <div id="conversa" class="border rounded p-2 chat" aria-live="polite">
+      {% for m in mensagens %}
+        {% if m.de == "cliente" %}
+        <div class="d-flex justify-content-end mb-2">
+          <div class="msg msg-cliente rounded px-2 py-1">
+            <span class="text-break">{{ m.texto }}</span>
+            <div class="small text-body-secondary text-end">{{ m.hora }}</div>
+          </div>
+        </div>
+        {% elif m.de == "alerta" %}
+        <div class="d-flex justify-content-center mb-2">
+          <div class="msg msg-alerta rounded px-2 py-1 small">Alerta para o vendedor: {{ m.texto }}</div>
+        </div>
+        {% else %}
+        <div class="d-flex mb-2">
+          <div class="msg msg-lia rounded px-2 py-1">
+            <div class="autor small">Lia</div>
+            <div class="text-break" style="white-space: pre-line">{{ m.texto|formatar }}</div>
+            {% if m.aviso %}<div class="aviso mt-1">Você está falando com uma assistente virtual com IA. Seus dados são usados só para este atendimento.</div>{% endif %}
+            {% if m.rastro or m.origem %}
+            <details class="mt-1">
+              <summary>Ferramentas ({{ m.rastro|length }}){% if m.origem %} · origem detectada{% endif %} · {{ m.detalhes }}</summary>
+              {% if m.origem %}<div class="rastro rounded px-2 py-1 mt-1">Origem do lead: <strong>{{ m.origem }}</strong> (emoji removido antes do modelo)</div>{% endif %}
+              {% for e in m.rastro %}
+              <div class="rastro rounded px-2 py-1 mt-1">
+                <strong>{{ e.tool }}</strong> · {{ e.ms }} ms {% if e.erro %}<span class="text-danger">· erro: {{ e.erro }}</span>{% endif %}
+                <div><code>{{ e.args }}</code></div>
+                <div><code>{{ e.resultado }}</code></div>
+              </div>
+              {% endfor %}
+            </details>
+            {% endif %}
+            <div class="small text-body-secondary text-end">{% if m.segura %}resposta segura · {% endif %}{{ m.hora }}</div>
+          </div>
+        </div>
+        {% endif %}
+      {% else %}
+      <p class="vazio text-body-secondary small m-2">Nenhuma mensagem ainda. Escreva abaixo, escolha uma pergunta do roteiro ou chegue por um canal.</p>
+      {% endfor %}
+    </div>
+    <form hx-post="/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-disabled-elt="find button, find input"
+          hx-indicator="#digitando" method="post" action="/mensagem" class="d-flex gap-2 mt-2">
+      <input class="form-control" type="text" name="texto" maxlength="1000" placeholder="Mensagem para a Lia"
+             aria-label="Mensagem para a Lia" autofocus autocomplete="off" required>
+      <button class="btn btn-primary">Enviar</button>
+    </form>
+    <div id="digitando" class="digitando small text-body-secondary mt-1">
+      <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Lia está digitando…
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <h2 class="h6">Roteiro de ensaio</h2>
+    <div class="d-flex flex-column gap-1 mb-3">
+      {% for p in perguntas %}
+      <form hx-post="/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-indicator="#digitando" method="post" action="/mensagem">
+        <input type="hidden" name="texto" value="{{ p }}">
+        <button class="btn btn-sm btn-outline-primary w-100 text-start">{{ p }}</button>
+      </form>
+      {% endfor %}
+    </div>
+
+    {% if inicio %}
+    <h2 class="h6">Chegar por um canal</h2>
+    <p class="small text-body-secondary mb-1">Simula o clique no link do WhatsApp de cada canal (a mensagem já vem com o emoji).</p>
+    <div class="d-flex flex-wrap gap-1 mb-3">
+      {% for o in origens %}
+      <form hx-post="/mensagem" hx-target="#painel" hx-swap="outerHTML" hx-indicator="#digitando" method="post" action="/mensagem">
+        <input type="hidden" name="texto" value="{{ mensagem_canal }} {{ o.marcador }}">
+        <button class="btn btn-sm btn-outline-secondary">{{ o.marcador }} {{ o.nome }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2 class="h6">Esta conversa</h2>
+    <ul class="list-unstyled small mb-2">
+      <li>Origem do lead: {% if origem %}<span class="badge canal">{{ origem }}</span>{% else %}<span class="text-body-secondary">desconhecida</span>{% endif %}</li>
+      <li>Pedido verificado: {{ pedido if pedido else "nenhum" }}</li>
+      <li>Solicitações registradas: {{ protocolos|join(", ") if protocolos else "nenhuma" }}</li>
+      <li>Modelo: <code>{{ modelo }}</code></li>
+      {% if data_referencia %}<li>Data de referência: {{ data_referencia.strftime("%d/%m/%Y %H:%M") }}</li>{% endif %}
+    </ul>
+    <form method="post" action="/nova"><button class="btn btn-sm btn-outline-secondary">Nova conversa</button></form>
+  </div>
+</div>

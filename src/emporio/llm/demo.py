@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 
+from emporio.alertas.deteccao import pediu_vendedor
 from emporio.data.normalize import normalizar
 from emporio.llm.base import RespostaLLM
 from emporio.llm.fake import chamar, responder
@@ -20,7 +21,8 @@ PALAVRAS_DE_PERGUNTA = set("""
 a o as os um uma uns umas de da do das dos e em no na nos nas para pra por com que qual quais quanto quanta
 quantos quantas custa custam custando sai saem preco precos valor valores tem tens tenho temos voces voce vcs
 me mostre mostra mostrar ver quero queria gostaria procuro procurando opcao opcoes modelo modelos disponivel
-disponiveis estoque algum alguma alguns algumas oi ola bom boa dia tarde noite favor por favor
+disponiveis estoque algum alguma alguns algumas oi ola bom boa dia tarde noite favor por favor mais
+informacao informacoes saber duvida duvidas ajuda ajudar
 """.split())
 
 
@@ -36,6 +38,9 @@ def _rotear(texto: str) -> RespostaLLM:
         return chamar("consultar_pedido", pedido_id=int(pedido.group(1)), verificacao=contato.group())
     if pedido:
         return responder(f"Para consultar o pedido {pedido.group(1)}, me informe o telefone ou o e-mail do cadastro. {AVISO}")
+    if pediu_vendedor(texto):          # a mesma detecção do alerta (SPEC-003): o aviso à equipe sai em código
+        return responder("Claro! A equipe foi avisada e um vendedor fala com você em seguida. Se preferir, o "
+                         f"telefone/WhatsApp é (67) 3341-4444. {AVISO}")
     if any(k in t for k in ("endereco", "horario", "aberto", "abre", "fecha", "telefone", "contato", "whatsapp")):
         return chamar("info_loja")
     if any(k in t for k in ("devol", "arrepend", "troca", "garantia", "frete", "entrega", "parcel", "pagamento",
@@ -44,6 +49,9 @@ def _rotear(texto: str) -> RespostaLLM:
     preco = re.search(r"(?:ate|abaixo de|menos de)\s*r?\$?\s*([\d.]+)", t)
     resto = re.sub(r"(?:ate|abaixo de|menos de)\s*r?\$?\s*[\d.]+", "", t)
     args: dict = {"texto": " ".join(w for w in resto.split() if w not in PALAVRAS_DE_PERGUNTA) or None}
+    if not args["texto"] and not preco:
+        return responder("Oi! Sou a Lia, assistente virtual da Empório da Música. Posso ajudar com instrumentos, "
+                         f"preços, pedidos, trocas e horários. O que você procura? {AVISO}")
     if preco:
         args["preco_max"] = float(preco.group(1).replace(".", ""))
     return chamar("buscar_produtos", **{k: v for k, v in args.items() if v is not None})

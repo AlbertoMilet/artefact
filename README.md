@@ -20,10 +20,10 @@ Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05
 - regras de negócio em funções Python puras e testadas: o LLM só redige, não faz contas nem decide elegibilidade;
 - manual consultado por BM25 por seção;
 - `deepseek/deepseek-v4.1-flash` via OpenRouter, sempre com Zero Data Retention (ZDR);
-- interface CLI.
+- interface web no estilo de painel (FastAPI, Jinja2, Bootstrap e HTMX), com o chat no terminal para automação.
 
 **Como foi verificada:**
-- 255 testes automatizados, sem rede e sem chave;
+- 266 testes automatizados, sem rede e sem chave;
 - 42 cenários com o modelo real, 3 repetições cada: as 126 execuções passaram nos verificadores, sem falha crítica ([relatório](docs/avaliacao.md)). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não avaliam nuance de tom.
 
 **Além do pedido:** quatro protótipos do que um atendimento por WhatsApp precisaria em produção. São eles retenção do cliente na janela de 24 h, alerta sonoro para o vendedor, conexão do número da loja à Meta (login com Facebook e código por SMS) e origem do lead por canal. Ficam [numa seção própria](#funcionalidades-extras), desligados ou isolados por padrão.
@@ -47,9 +47,13 @@ O `uv run` usa o ambiente do projeto, então não é preciso ativá-lo.
 
 ```bash
 uv sync                                    # instala as dependências travadas (uv.lock)
-uv run python -m emporio chat --fake       # demonstração SEM chave e SEM modelo de linguagem
-uv run pytest                              # 255 testes, sem rede e sem chave (~10 s)
+uv run python -m emporio ui --fake         # abre a interface no navegador, SEM chave e SEM modelo de linguagem
+uv run pytest                              # 266 testes, sem rede e sem chave (~12 s)
 ```
+
+A interface ([SPEC-006](docs/specs/SPEC-006-interface-web.md)) abre em `http://127.0.0.1:8000`, com duas telas:
+- **Atendimento:** a conversa com a Lia, um roteiro de perguntas com um clique e, em cada resposta, as tools usadas com argumentos, resultado, tempo e custo.
+- **Painel do vendedor:** os alertas de pedido de vendedor e de encaminhamento, atualizados a cada 2 s.
 
 O modo `--fake` é um roteador por palavras-chave que chama as **tools reais** e formata o resultado. Serve para ver as regras funcionando sem chave, e toda resposta avisa que não há modelo. A qualidade da conversa só aparece com o modelo real; veja os [exemplos](#exemplos-de-conversa).
 
@@ -60,8 +64,8 @@ cp .env.example .env                       # Windows: copy .env.example .env
 # no .env: OPENROUTER_API_KEY=sk-or-...   (chave em https://openrouter.ai/settings/keys)
 # opcional: DATA_REFERENCIA=2026-03-25T10:00, a data usada nos exemplos e evals
 
-uv run python -m emporio chat              # conversa interativa (/novo recomeça, /sair encerra)
-uv run python -m emporio chat --debug      # mostra tools, argumentos, resultados, tokens e custo
+uv run python -m emporio                   # a interface web (o mesmo que `ui`)
+uv run python -m emporio chat --debug      # alternativa no terminal, com o rastro das tools
 ```
 
 Os pedidos dos dados vão de out/2025 a mar/2026. Sem `DATA_REFERENCIA`, o relógio real faz pedidos de março parecerem pendentes há meses.
@@ -88,7 +92,7 @@ O runner dos evals usa 4 conversas em paralelo e temperatura fixa quando o model
 
 ```mermaid
 flowchart LR
-    C["Cliente (CLI)"] --> A["Agente<br/>loop curto, até 5 tools por turno"]
+    C["Cliente (web ou terminal)"] --> A["Agente<br/>loop curto, até 5 tools por turno"]
     A <--> L["LLM via OpenRouter<br/>provider.zdr = true"]
     A --> T["9 tools tipadas (Pydantic)"]
     T --> R["Regras puras<br/>preço · PIX · parcelas · frete<br/>devolução · horário · verificação"]
@@ -209,7 +213,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes (`uv run pytest`, 255, sem rede):**
+**Testes (`uv run pytest`, 266, sem rede):**
 - **Unidade:** regras com valores escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; arrependimento no 7.º dia é elegível, no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a nova verificação ao trocar de pedido, a resposta segura e o payload com ZDR.
 
@@ -306,7 +310,7 @@ Usei o **Claude Code** (Claude Opus 5.5) como par de programação e o **Codex C
 
 ```text
 src/emporio/   rules/ (regras puras) · tools/ · agent/ (prompt e loop) · llm/ (OpenRouter com ZDR)
-               data/ (CSVs validados) · policies/ (manual e BM25) · cli.py
+               data/ (CSVs validados) · policies/ (manual e BM25) · web/ (interface) · cli.py
                retencao/ · alertas/ · whatsapp/ · rules/origem.py   (funcionalidades extras)
 evals/         cenários, verificador e runner com o modelo real
 tests/         unit/ · conversa/ · evals/ (pytest -m llm)

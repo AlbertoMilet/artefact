@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set ativo = "vendedor" %}
+{% block title %}Painel do vendedor · Empório da Música{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+  <h1 class="h4 mb-0">Painel do vendedor</h1>
+  <button id="ativar-som" type="button" class="btn btn-sm btn-outline-primary">Ativar som</button>
+</div>
+<p class="small text-body-secondary">Alertas de quando o cliente pede um vendedor ou a Lia encaminha uma solicitação. A lista se atualiza a cada 2 s; o navegador só toca som depois de você clicar em "Ativar som".</p>
+{% include "_alertas.html" %}
+<script>
+  // Som sintetizado no navegador (mesmos padrões do vigia do terminal, SPEC-003).
+  (() => {
+    let audio = null, vistos = null;
+    const tocar = (vendedor) => {
+      if (!audio) return;
+      const notas = vendedor ? [523.3, 659.3, 784.0, 523.3, 659.3, 784.0] : [880, 1174.7];
+      notas.forEach((f, i) => {
+        const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.16;
+        o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+        g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.16);
+      });
+    };
+    document.getElementById("ativar-som").addEventListener("click", (e) => {
+      audio = audio || new AudioContext();
+      e.target.textContent = "Som ativado";
+      e.target.disabled = true;
+    });
+    const conferir = () => {
+      const itens = [...document.querySelectorAll("#alertas [data-id]")];
+      const ids = new Set(itens.map((i) => i.dataset.id));
+      if (vistos !== null) {
+        const novos = itens.filter((i) => !vistos.has(i.dataset.id));
+        novos.forEach((i) => i.classList.add("novo"));
+        const sonoros = novos.filter((i) => i.dataset.tocar === "1");
+        if (sonoros.length) tocar(sonoros.some((i) => i.dataset.tipo === "pedido_vendedor"));
+      }
+      vistos = ids;
+    };
+    document.body.addEventListener("htmx:afterSettle", conferir);
+    conferir();
+  })();
+</script>
+{% endblock %}
