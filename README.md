@@ -56,7 +56,7 @@ Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [g
 
 | Comando | O que faz |
 |---|---|
-| `uv run pytest` | 207 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
+| `uv run pytest` | 225 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
 | `uv run pytest -m llm` | evals com o modelo real como teste (critérios CA-16 a CA-18) |
 | `uv run python -m evals.rodar --repeticoes 3` | avaliação completa com o modelo real e relatório em `docs/avaliacao.md` |
 | `uv run python scripts/gerar_exemplos.py` | regenera os exemplos de conversa em `examples/conversas/` |
@@ -149,9 +149,9 @@ Funcionalidade da [SPEC-003](docs/specs/SPEC-003-alerta-sonoro-vendedor.md), ins
 | Pedido de vendedor | O cliente pede vendedor, atendente ou pessoa ("quero falar com um vendedor"), detectado em código | tríade ascendente tocada duas vezes |
 | Encaminhamento | Uma solicitação é gravada (reclamação, devolução, troca, atendimento humano) | duas notas curtas |
 
-- **No chat**, o alerta aparece como aviso visual e toca o som.
+- **No chat**, o alerta aparece como aviso visual na hora em que o cliente escreve, antes de a Lia responder. O som fica com o vigia, para não tocar em dobro; use `--som-no-chat` se não houver vigia aberto.
 - **No balcão**, um segundo terminal roda o vigia: `uv run python -m emporio vendedor`. Ele lê a fila `logs/alertas.jsonl` (mascarada), ignora o que já existia ao abrir, toca uma vez por ciclo e mostra o motivo, o protocolo e um trecho da mensagem.
-- **Sem repetição:** o mesmo pedido só alerta de novo depois de 10 min, e o registro de atendimento humano logo após um pedido vai para a fila sem tocar outra vez.
+- **Sem repetição:** o mesmo pedido só alerta de novo depois de 10 min, e o registro de atendimento humano logo após um pedido vai para a fila sem tocar outra vez. Frases negadas ("não quero falar com um vendedor") não disparam.
 - **Mudo:** `--sem-som`, `/som` no chat ou `configurar --som desligado`; o aviso visual continua. `vendedor --testar` toca os dois padrões.
 - **Som por sistema:** no Windows sai pelo `winsound.Beep`; nos demais sistemas, pela campainha do terminal.
 
@@ -316,7 +316,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes automatizados (`uv run pytest`): 207, sem rede e sem chave.**
+**Testes automatizados (`uv run pytest`): 225, sem rede e sem chave.**
 - **Unidade:** regras e tools, com valores esperados escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; R$ 500,00 paga frete; arrependimento no 7.º dia elegível e no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a troca de pedido (que exige nova verificação), a resposta segura, o histórico mascarado e o payload com ZDR.
 

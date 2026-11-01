@@ -62,17 +62,27 @@ class CentralAlertas:
 
     def avaliar_turno(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime) -> list[Alerta]:
         """Eventos do turno: pedido explícito na mensagem e solicitações gravadas pela tool."""
+        return (self.avaliar_pedido(conversa, texto_cliente, agora)
+                + self.avaliar_encaminhamentos(conversa, texto_cliente, rastro, agora))
+
+    def avaliar_pedido(self, conversa: str, texto_cliente: str, agora: datetime) -> list[Alerta]:
+        """Pedido explícito: avaliado na ENTRADA do turno, sem esperar o modelo (revisão do Codex)."""
+        if not pediu_vendedor(texto_cliente):
+            return []
+        with self._trava:
+            recente = self._ultimo_pedido.get(conversa)
+            if recente is not None and agora - recente < JANELA_REPETICAO:
+                return []
+            # A janela conta do último ALERTA: quem insiste a cada 5 min volta a alertar após 10 min
+            self._ultimo_pedido[conversa] = agora
+        trecho = mascarar_texto(" ".join(texto_cliente.split()))[:160]
+        return [Alerta("pedido_vendedor", "cliente pediu atendimento humano", conversa, agora.isoformat(), trecho=trecho)]
+
+    def avaliar_encaminhamentos(self, conversa: str, texto_cliente: str, rastro: list, agora: datetime) -> list[Alerta]:
         alertas: list[Alerta] = []
         trecho = mascarar_texto(" ".join(texto_cliente.split()))[:160]
         recente = self._ultimo_pedido.get(conversa)
         pedido_recente = recente is not None and agora - recente < JANELA_REPETICAO
-        if pediu_vendedor(texto_cliente):
-            if not pedido_recente:
-                alertas.append(Alerta("pedido_vendedor", "cliente pediu atendimento humano", conversa,
-                                      agora.isoformat(), trecho=trecho))
-                # A janela conta do último ALERTA: quem insiste a cada 5 min volta a alertar após 10 min
-                self._ultimo_pedido[conversa] = agora
-            pedido_recente = True
         for evento in rastro:
             if evento.tool != "registrar_solicitacao" or evento.erro:
                 continue
@@ -90,20 +100,27 @@ class CentralAlertas:
         return alertas
 
     def emitir(self, alertas: list[Alerta]) -> None:
+        """Aviso visual primeiro (RA-04), depois a fila e o som. A fila assume um escritor por processo de chat;
+        vários chats em paralelo escrevendo no mesmo arquivo estão fora do escopo do protótipo."""
         if not alertas:
             return
-        with self._trava:
-            self.fila.parent.mkdir(parents=True, exist_ok=True)
-            with self.fila.open("a", encoding="utf-8") as f:
-                for a in alertas:
-                    f.write(json.dumps(asdict(a), ensure_ascii=False) + "\n")
+        if self.avisar:
+            for a in alertas:
+                self.avisar(a)
+        try:
+            with self._trava:
+                self.fila.parent.mkdir(parents=True, exist_ok=True)
+                with self.fila.open("a", encoding="utf-8") as f:
+                    for a in alertas:
+                        f.write(json.dumps(asdict(a), ensure_ascii=False) + "\n")
+        except OSError as e:
+            if self.avisar:
+                self.avisar(Alerta("encaminhamento", f"falha ao gravar a fila do vendedor ({type(e).__name__})",
+                                   alertas[0].conversa, alertas[0].quando, tocar=False))
         sonoros = [a for a in alertas if a.tocar]
         if sonoros:
             # RA-02: com os dois no mesmo turno, vale o padrão do pedido explícito
             self.tocador.tocar("vendedor" if any(a.padrao == "vendedor" for a in sonoros) else "normal")
-        if self.avisar:
-            for a in alertas:
-                self.avisar(a)
 
 
 # ---------------------------------------------------------------- vigia do vendedor
@@ -137,6 +154,7 @@ def vigiar(fila: Path, tocador: Tocador, mostrar: Callable[[str], None], interva
         sonoros = [a for a in novos if a.get("tocar", True)]
         pedido = any(a.get("tipo") == "pedido_vendedor" for a in sonoros)
         tocou = tocador.tocar_e_esperar("vendedor" if pedido else "normal") if sonoros else False
+        mostrar(f"{len(novos)} novo(s) alerta(s):")
         for a in novos:
             hora = a.get("quando", "")[11:16]
             alerta = Alerta(**{k: a[k] for k in ("tipo", "motivo", "conversa", "quando") if k in a},
@@ -146,7 +164,7 @@ def vigiar(fila: Path, tocador: Tocador, mostrar: Callable[[str], None], interva
                 linha += f' | "{a["trecho"]}"'
             mostrar(linha)
         if sonoros and not tocou:
-            mostrar("(som desligado: só o aviso visual)")
+            mostrar("(som desligado ou indisponível: só o aviso visual)")
         mostrar(f"\033]0;({len(novos)}) Empório: alerta para o vendedor\a")   # título do terminal
         avisados += len(novos)
     return avisados

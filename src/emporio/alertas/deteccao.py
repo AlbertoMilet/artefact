@@ -3,6 +3,7 @@
 Determinístico de propósito, como o EXPLICIT_LAWYER_REQUEST do Saúde Legal: é o caso mais quente e não
 pode depender de o modelo entender. Exige um verbo de pedido perto da pessoa pedida, para não disparar
 em "o vendedor de vocês me indicou este violão" nem em "quero um violão para uma pessoa iniciante".
+Trechos negados ("não quero falar com um vendedor") são retirados antes da busca (revisão do Codex).
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from emporio.data.normalize import normalizar
 
 _PESSOA = (r"(vendedor|vendedora|atendente|humano|humana|pessoa|alguem|gerente|consultor|consultora|"
            r"funcionario|funcionaria)")
+# "não/nem/sem ... (até 5 palavras) ... vendedor": o cliente recusa a pessoa, não a pede
+_NEGADO = re.compile(r"\b(nao|nem|sem)\s+(\w+\s+){0,5}?" + _PESSOA + r"\b")
 _PADROES = [
     # verbo de comunicação, com até 3 palavras no meio: "posso falar com o gerente", "me passa pra um atendente"
     re.compile(r"\b(falar|conversar|atendimento|atender|chamar?|chama|passa|passar|transferir|transfere|transfira)\b"
@@ -27,4 +30,7 @@ _PADROES = [
 
 def pediu_vendedor(texto: str) -> bool:
     t = normalizar(texto)
-    return bool(t) and any(p.search(t) for p in _PADROES)
+    if not t:
+        return False
+    t = _NEGADO.sub(" ", t)
+    return any(p.search(t) for p in _PADROES)

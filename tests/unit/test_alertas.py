@@ -44,7 +44,8 @@ def test_detecta_pedido_explicito(texto):
     assert pediu_vendedor(texto)
 
 
-@pytest.mark.parametrize("texto", ["o vendedor de vocês me indicou este violão", "o atendente da loja foi ótimo",
+@pytest.mark.parametrize("texto", ["não quero falar com um vendedor", "não preciso de atendente, só uma dúvida",
+                                   "o vendedor de vocês me indicou este violão", "o atendente da loja foi ótimo",
                                    "quero um violão para uma pessoa iniciante", "vou falar com minha esposa e volto",
                                    "quanto custa o Takamine?"])
 def test_ca3_02_nao_dispara_sem_pedido(texto):
@@ -120,11 +121,26 @@ def test_ca3_05_vigia_ignora_antigos_e_toca_uma_vez_por_ciclo(central):
     avisados = vigiar(central.fila, tocador, linhas.append, intervalo_s=0, ciclos=2, dormir=dormir)
     assert avisados == 2 and tocador.tocados == ["vendedor"]
     texto = "\n".join(linhas)
-    assert "3 alerta(s) já existente(s) ignorado(s)" in texto
+    assert "3 alerta(s) já existente(s) ignorado(s)" in texto and "2 novo(s) alerta(s):" in texto
     assert "Cliente pediu um vendedor" in texto and "troca (SIM-2)" in texto
 
 
 def test_tocador_real_nao_quebra_sem_dispositivo():
     chamado = []
     t = Tocador(executar=lambda p: (chamado.append(p), (_ for _ in ()).throw(RuntimeError("sem som"))))
-    assert t.tocar_e_esperar("vendedor") is True and chamado
+    assert t.tocar_e_esperar("vendedor") is False and chamado          # informa que não tocou
+
+
+def test_falha_ao_gravar_a_fila_mantem_o_aviso_visual(tmp_path):
+    avisos = []
+    pasta_no_lugar_do_arquivo = tmp_path / "fila"
+    pasta_no_lugar_do_arquivo.mkdir()
+    c = CentralAlertas(TocadorFalso(), pasta_no_lugar_do_arquivo, avisar=lambda a: avisos.append(a.aviso()))
+    c.emitir(c.avaliar_turno("c1", "quero falar com um vendedor", [], T0))
+    assert avisos[0].startswith("🙋") and any("falha ao gravar" in a for a in avisos)
+
+
+def test_fila_mascara_fixo_e_email(central):
+    central.emitir(central.avaliar_turno("c1", "quero um vendedor, fixo 33424567, email fulano@jmail.com", [], T0))
+    texto = central.fila.read_text(encoding="utf-8")
+    assert "33424567" not in texto and "fulano@" not in texto

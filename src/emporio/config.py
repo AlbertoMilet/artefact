@@ -37,7 +37,8 @@ class Config:
     retencao: ConfigRetencao = ConfigRetencao()
     raciocinio: bool = True                      # LLM_RACIOCINIO: raciocínio estendido do modelo no agente
     alertas: bool = True                         # alertas para o vendedor (SPEC-003); evals e exemplos desligam
-    alerta_sonoro: bool = True                   # ALERTA_SONORO: som dos alertas
+    alerta_sonoro: bool = True                   # ALERTA_SONORO: som dos alertas (no vigia do vendedor)
+    som_no_chat: bool = False                    # ALERTA_SOM_NO_CHAT: tocar também no chat (sem vigia aberto)
 
     @classmethod
     def do_ambiente(cls, env_file: Path | None = RAIZ / ".env", usar_preferencias: bool = True) -> "Config":
@@ -80,6 +81,7 @@ class Config:
             history_window=int(os.getenv("HISTORY_WINDOW", "10")),
             raciocinio=os.getenv("LLM_RACIOCINIO", "true").strip().lower() != "false",
             alerta_sonoro=os.getenv("ALERTA_SONORO", "true").strip().lower() != "false",
+            som_no_chat=os.getenv("ALERTA_SOM_NO_CHAT", "false").strip().lower() == "true",
             tickets_path=Path(os.getenv("TICKETS_PATH", str(RAIZ / "tickets.jsonl"))),
             retencao=ConfigRetencao(
                 ativa=os.getenv("RETENCAO_ATIVA", "false").strip().lower() == "true",
@@ -111,7 +113,8 @@ def montar_agente(config: Config | None = None, llm: LLMClient | None = None) ->
     llm = llm or montar_llm(config)
     return Agente(llm, toolbox, config.max_tool_calls, config.turn_timeout_s, config.history_window,
                   retencao=Retencao(llm, config.retencao, relogio), raciocinio=config.raciocinio,
-                  alertas=CentralAlertas(Tocador(ligado=config.alerta_sonoro)) if config.alertas else None)
+                  alertas=CentralAlertas(Tocador(ligado=config.alerta_sonoro and config.som_no_chat))
+                  if config.alertas else None)
 
 
 __all__ = ["Config", "FakeLLMClient", "montar_agente", "montar_llm"]

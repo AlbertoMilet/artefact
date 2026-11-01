@@ -51,13 +51,14 @@ class Tocador:
         return True
 
     def tocar_e_esperar(self, tipo: str) -> bool:
+        """True só se o som de fato tocou (sem dispositivo, devolve False e o vigia avisa)."""
         if not self.ligado:
             return False
-        self._executar_seguro(PADROES.get(tipo, PADROES["normal"]))
-        return True
+        return self._executar_seguro(PADROES.get(tipo, PADROES["normal"]))
 
-    def _executar_seguro(self, padrao) -> None:
+    def _executar_seguro(self, padrao) -> bool:
         try:
             self._executar(padrao)
+            return True
         except Exception:      # sem dispositivo de som: o aviso visual já cobre (RA-04)
-            pass
+            return False

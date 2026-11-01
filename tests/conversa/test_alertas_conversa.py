@@ -56,7 +56,7 @@ def test_cli_mostra_aviso_e_grava_a_fila(ambiente, capsys, tmp_path):
     cli.main(["chat", "--fake", "-m", "quero falar com um vendedor", "-m", "/som", "-m", "/som"])
     out = capsys.readouterr().out
     assert "[alerta para o vendedor] 🙋 Cliente pediu um vendedor" in out
-    assert "Som dos alertas para o vendedor: " in out
+    assert "Som dos alertas neste chat: " in out
     assert ler_fila(tmp_path / "alertas.jsonl")[0]["tipo"] == "pedido_vendedor"
 
 
@@ -71,3 +71,21 @@ def test_configurar_som(ambiente, capsys):
     cli.main(["configurar", "--som", "desligado"])
     assert preferencias.carregar()["alerta_sonoro"] is False
     assert "Som dos alertas:        desligado (preferência salva)" in capsys.readouterr().out
+
+
+def test_pedido_alerta_antes_do_modelo_responder(catalogo, tmp_path):
+    from emporio.llm import LLMIndisponivel
+    central = CentralAlertas(TocadorFalso(), tmp_path / "alertas.jsonl")
+    ag = Agente(FakeLLMClient([LLMIndisponivel("fora do ar")]), Toolbox(catalogo, carregar_manual()), alertas=central)
+    r = ag.responder(ag.nova_conversa(), "quero falar com um vendedor")
+    assert r.segura and [a.tipo for a in r.alertas] == ["pedido_vendedor"]      # alertou mesmo com o LLM fora
+
+
+def test_som_no_chat_desligado_por_padrao(monkeypatch, tmp_path):
+    from emporio.config import Config, montar_agente
+    monkeypatch.setenv("ALERTA_SONORO", "true")
+    monkeypatch.setattr("emporio.config.load_dotenv", lambda *a, **k: None)
+    ag = montar_agente(Config(llm_provider="fake", tickets_path=tmp_path / "t.jsonl"))
+    assert ag.alertas.tocador.ligado is False                                    # só o vigia toca
+    ag2 = montar_agente(Config(llm_provider="fake", som_no_chat=True, tickets_path=tmp_path / "t.jsonl"))
+    assert ag2.alertas.tocador.ligado is True

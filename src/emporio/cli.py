@@ -152,7 +152,8 @@ def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config:
         else:
             central.tocador.ligado = not central.tocador.ligado
             estado = "ligado" if central.tocador.ligado else "desligado (o aviso visual continua)"
-            print(_cor(f"Som dos alertas para o vendedor: {estado}\n", "2"))
+            print(_cor(f"Som dos alertas neste chat: {estado}. O vigia (python -m emporio vendedor) tem o "
+                       f"próprio controle (--sem-som).\n", "2"))
     elif baixo == "/config":
         print(_cor(cli_config.comando_config(agente, config or Config()) + "\n", "2"))
     else:
@@ -252,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir; aceita /esperar e /janela)")
     chat.add_argument("--retencao", action="store_true", help="liga a retenção por inatividade (SPEC-002)")
     chat.add_argument("--sem-som", action="store_true", help="alertas para o vendedor só com aviso visual (SPEC-003)")
+    chat.add_argument("--som-no-chat", action="store_true",
+                      help="toca o alerta também no chat (padrão: só o vigia toca, para não soar em dobro)")
     a = ap.parse_args(argv)
 
     configurar_log(RAIZ / "logs")
@@ -268,6 +271,8 @@ def main(argv: list[str] | None = None) -> int:
         config = replace(config, retencao=replace(config.retencao, ativa=True))
     if a.sem_som:
         config = replace(config, alerta_sonoro=False)
+    if a.som_no_chat:
+        config = replace(config, som_no_chat=True)
     try:
         agente = montar_agente(config)
     except DadosIndisponiveis as e:

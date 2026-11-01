@@ -120,6 +120,10 @@ class Agente:
             self.retencao.ao_receber(ac, texto_cliente, agora)
         else:
             ac.ultima_msg_cliente = agora
+        pedidos = []
+        if self.alertas is not None:      # pedido de vendedor alerta já na entrada, sem esperar o modelo
+            pedidos = self.alertas.avaliar_pedido(conversa.id, texto_cliente, agora)
+            self.alertas.emitir(pedidos)
         system = {"role": "system", "content": montar_prompt(self.toolbox.relogio())}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
@@ -193,8 +197,9 @@ class Agente:
         visivel = mascarar_texto(texto_final)      # o cliente nunca vê contato completo de cliente (RN-09)
         resp.texto = f"{visivel}\n\n{AVISO_PRIVACIDADE}" if primeira else visivel
         if self.alertas is not None:
-            resp.alertas = self.alertas.avaliar_turno(conversa.id, texto_cliente, resp.rastro, agora)
-            self.alertas.emitir(resp.alertas)
+            encaminhamentos = self.alertas.avaliar_encaminhamentos(conversa.id, texto_cliente, resp.rastro, agora)
+            self.alertas.emitir(encaminhamentos)
+            resp.alertas = pedidos + encaminhamentos
         resp.latencia_s = time.perf_counter() - inicio
         self._registrar_log(conversa, resp)
         return resp

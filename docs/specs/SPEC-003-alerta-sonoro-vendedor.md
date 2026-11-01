@@ -1,6 +1,6 @@
 # SPEC-003: Alerta sonoro para o vendedor
 
-- **Status:** concluída (rev. 2)
+- **Status:** concluída (rev. 3): correções da revisão do Codex de 01/11/2026
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Origem:** pedido do usuário em 01/11/2026, inspirado no aviso de novo caso do painel do projeto Saúde Legal (`panel/panel.js`, `verificarNovosCasos` e `tocarAviso`)
@@ -55,6 +55,10 @@ Avisar o vendedor, com som e texto, quando o cliente pedir atendimento humano ou
 | RA-06 | O vigia ignora o que já estava na fila quando abriu e toca uma vez por ciclo, mesmo com vários alertas novos (o aviso informa quantos) | Saúde Legal (`verificarNovosCasos`) |
 | RA-07 | O som é sintetizado: `winsound.Beep` no Windows; campainha do terminal (`\a`) nos demais. Tocar não bloqueia a conversa | Saúde Legal (oscilador, sem arquivo) |
 | RA-08 | O alerta é interno: a Lia não promete ao cliente que um vendedor vai chamá-lo (o registro segue simulado, RN-21) | SPEC-001 |
+| RA-09 | Trechos negados ("não quero falar com um vendedor", "não preciso de atendente") não disparam o pedido | Revisão do Codex |
+| RA-10 | O pedido explícito alerta na ENTRADA do turno, antes de o modelo responder (inclusive se o modelo falhar); os encaminhamentos alertam ao fim do turno | Revisão do Codex |
+| RA-11 | Um responsável pelo som: o vigia toca; o chat mostra o aviso visual e só toca com `--som-no-chat` (ou `ALERTA_SOM_NO_CHAT=true`), para não soar em dobro. `/som` controla só o chat | Revisão do Codex |
+| RA-12 | A fila assume um escritor por processo de chat; o aviso visual sai antes da gravação, e uma falha ao gravar é avisada sem perder o alerta na tela. Vários chats escrevendo no mesmo arquivo, rotação e retenção da fila ficam fora do escopo | Revisão do Codex |
 
 ## 5. Critérios de aceite
 
