@@ -7,6 +7,8 @@ Protótipo de agente de atendimento por texto para a **Empório da Música**, lo
 
 Desafio Técnico AI Engineer 2026, Artefact.
 
+Trecho resumido de uma conversa ([completa aqui](examples/conversas/02-takamine-gd20.md)):
+
 ```text
 Cliente: Quanto custa o Takamine GD20?
 Lia:     O Takamine GD20 Dreadnought Natural sai por R$ 2.199,00, ou R$ 2.089,05 no PIX (5% de desconto).
@@ -62,7 +64,7 @@ uv run python -m emporio chat --debug      # mostra tools, argumentos, resultado
 
 Os pedidos dos dados vão de out/2025 a mar/2026. Sem `DATA_REFERENCIA`, o relógio real faz pedidos de março parecerem pendentes há meses.
 
-**Trocar o modelo:** `uv run python -m emporio configurar --modelo haiku`. As opções são `deepseek` (padrão), `haiku` e `gpt-sol`; também dá para usar `OPENROUTER_MODEL` no `.env`. O configurador confere na lista pública do OpenRouter se o modelo tem endpoint ZDR com suporte a tools. As escolhas ficam em `.emporio.json`, fora do git; evals e exemplos as ignoram, para serem reproduzíveis.
+**Trocar o modelo:** `uv run python -m emporio configurar --modelo haiku`. As opções são `deepseek` (padrão), `haiku` e `gpt-sol`; também dá para usar `OPENROUTER_MODEL` no `.env`, mas a escolha salva pelo `configurar` tem prioridade sobre ele. O configurador confere na lista pública do OpenRouter se o modelo tem endpoint ZDR com suporte a tools. As escolhas ficam em `.emporio.json`, fora do git; evals e exemplos as ignoram, para serem reproduzíveis.
 
 **Outras variáveis:** `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`), `EMPORIO_DATA_DIR` e `LLM_PROVIDER` (`openrouter` ou `fake`). Todas estão comentadas em `.env.example`.
 
@@ -149,7 +151,7 @@ A escolha saiu de uma [comparação antes de codar](docs/fase0-modelos.md) e foi
 Nenhum dos três teve falha crítica. Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md).
 
 - **Achado que mudou o código:** com `require_parameters`, enviar um parâmetro que nenhum endpoint ZDR suporta derruba a chamada com 404. O Haiku não aceita `temperature`, por exemplo. Por isso o cliente consulta a lista pública de endpoints ZDR ao iniciar e só envia o que o modelo aceita.
-- **Raciocínio estendido ligado** (decisão D-13): com ele, 126/126; sem ele, 116/126, embora mais rápido (2,2 s contra 2,7 s). Sem raciocínio, o modelo não inventou nada, mas pedia mais dados em vez de consultar a política.
+- **Raciocínio estendido ligado** (decisão D-13): com ele, 126/126; sem ele, 116/126, embora cerca de 0,5 s mais rápido por conversa (rodada comparativa da D-13). Sem raciocínio, o modelo não inventou nada, mas pedia mais dados em vez de consultar a política.
 
 ### Retrieval: BM25 por seção, sem banco vetorial
 
