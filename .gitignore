@@ -1,0 +1,17 @@
+# Ambiente
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Segredos
+.env
+
+# Material original do processo seletivo (os dados usados pelo agente estão em data/)
+Desafio Técnico AI Engineer 2026/
+
+# Saídas locais
+tickets.jsonl
+logs/
+.claude/
