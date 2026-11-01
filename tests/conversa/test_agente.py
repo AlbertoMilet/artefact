@@ -143,6 +143,17 @@ def test_limite_de_chamadas_forca_resposta_em_texto(toolbox):
     assert llm.chamadas[-1]["forcar_texto"] is True
 
 
+def test_resposta_vazia_e_pedida_de_novo_uma_vez(toolbox):
+    llm = FakeLLMClient([chamar("info_loja"), responder(""), responder("Rua 14 de Maio, 3200.")])
+    ag = Agente(llm, toolbox)
+    r = ag.responder(ag.nova_conversa(), "endereço?")
+    assert not r.segura and "14 de Maio" in r.texto
+    assert llm.chamadas[-1]["forcar_texto"] is True
+    ag2 = agente(toolbox, responder(""), responder(""))
+    r2 = ag2.responder(ag2.nova_conversa(), "oi")
+    assert r2.segura and r2.motivo_segura == "resposta_vazia"
+
+
 def test_tempo_limite(toolbox):
     ag = agente(toolbox, chamar("info_loja"), responder("ok"), timeout_turno_s=0)
     r = ag.responder(ag.nova_conversa(), "oi")

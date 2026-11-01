@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from urllib.request import urlopen
 
 from openai import OpenAI, OpenAIError
@@ -26,16 +27,34 @@ TEMPERATURA = 0.2
 MAX_SAIDA = 800
 
 
+_cache_zdr: list | None = None
+_trava_zdr = threading.Lock()
+
+
+def _lista_zdr(timeout: float) -> list | None:
+    """Lista de endpoints ZDR, lida uma vez por processo (com uma nova tentativa)."""
+    global _cache_zdr
+    with _trava_zdr:
+        if _cache_zdr is not None:
+            return _cache_zdr
+        for tentativa in (1, 2):
+            try:
+                with urlopen(URL_ZDR, timeout=timeout) as resp:
+                    _cache_zdr = json.load(resp)["data"]
+                return _cache_zdr
+            except Exception as e:  # rede, TLS, JSON: não bloqueia; envia só o obrigatório
+                if tentativa == 2:
+                    log.warning("não foi possível ler a lista ZDR do OpenRouter: %s", e)
+        return None
+
+
 def parametros_zdr(modelo: str, timeout: float = 20) -> set[str] | None:
     """Parâmetros que algum endpoint ZDR do modelo (com suporte a tools) aceita.
 
     set() quando o modelo não tem endpoint ZDR com tools; None quando a lista não pôde ser lida.
     """
-    try:
-        with urlopen(URL_ZDR, timeout=timeout) as resp:
-            dados = json.load(resp)["data"]
-    except Exception as e:  # rede, JSON: não bloqueia; envia só o obrigatório
-        log.warning("não foi possível ler a lista ZDR do OpenRouter: %s", e)
+    dados = _lista_zdr(timeout)
+    if dados is None:
         return None
     suportados: set[str] = set()
     for e in dados:

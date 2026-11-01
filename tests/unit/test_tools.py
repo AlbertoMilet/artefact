@@ -40,6 +40,15 @@ def test_tool_desconhecida_e_argumento_invalido_viram_erro(tb, s):
     assert tb.executar("buscar_produtos", '{"categoria": "Saxofones"}', s)["erro"] == "argumentos_invalidos"
 
 
+def test_categoria_com_acento_corrompido_e_aceita(tb, s):
+    # DeepSeek mandou "Violཞs" no lugar de "Violões" (Fase 5)
+    r = tb.executar("buscar_produtos", {"categoria": "Violཞs", "limite": 3}, s)
+    assert "erro" not in r and r["resultados"][0]["categoria"] == "Violões"
+    assert tb.executar("buscar_produtos", {"categoria": "violoes"}, s)["resultados"]
+    erro = tb.executar("buscar_produtos", {"categoria": "Saxofones"}, s)
+    assert "Violões" in " ".join(erro["detalhes"])        # o erro lista as categorias válidas
+
+
 def test_buscar_gd20_valores_formatados(tb, s):
     r = tb.executar("buscar_produtos", {"texto": "Takamine GD20"}, s)["resultados"][0]
     assert (r["produto_id"], r["preco_tabela"], r["preco_pix"], r["estoque"]) == (95, "R$ 2.199,00", "R$ 2.089,05", 5)

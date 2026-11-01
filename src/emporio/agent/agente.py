@@ -34,6 +34,7 @@ class EventoTool:
     resultado: str           # mascarado e resumido
     duracao_ms: int
     erro: str | None = None
+    completo: str = ""      # JSON integral, mascarado (avaliação: valores rastreáveis)
 
 
 @dataclass
@@ -100,7 +101,7 @@ class Agente:
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
         resp = RespostaTurno(texto="")
-        chamadas = erros = 0
+        chamadas = erros = vazias = 0
         texto_final: str | None = None
 
         def mensagens() -> list[dict]:
@@ -111,13 +112,16 @@ class Agente:
                 if time.perf_counter() - inicio > self.timeout_turno_s:
                     resp.motivo_segura = "tempo_limite"
                     break
-                limite = chamadas >= self.max_tool_calls
+                limite = chamadas >= self.max_tool_calls or vazias > 0
                 r: RespostaLLM = self.llm.completar(mensagens(), tools, forcar_texto=limite)
                 resp.tokens_entrada += r.uso.tokens_entrada
                 resp.tokens_saida += r.uso.tokens_saida
                 resp.custo_usd += r.uso.custo_usd
                 if not r.tool_calls or limite:
                     texto_final = (r.texto or "").strip() or None
+                    if texto_final is None and vazias == 0:
+                        vazias = 1            # resposta vazia: pede o texto mais uma vez (Fase 5)
+                        continue
                     if texto_final is None:
                         resp.motivo_segura = "resposta_vazia"
                     break
@@ -128,9 +132,11 @@ class Agente:
                     resultado = self.toolbox.executar(call.nome, call.argumentos, conversa.sessao)
                     erro = resultado.get("erro") if isinstance(resultado, dict) else None
                     erros += bool(erro)
+                    integral = json.dumps(resultado, ensure_ascii=False)
                     resp.rastro.append(EventoTool(call.nome, mascarar_texto(call.argumentos),
                                                   mascarar_texto(_resumir(resultado)),
-                                                  int((time.perf_counter() - t0) * 1000), erro))
+                                                  int((time.perf_counter() - t0) * 1000), erro,
+                                                  mascarar_texto(integral)))
                     novas.append({"role": "tool", "tool_call_id": call.id,
                                   "content": json.dumps(resultado, ensure_ascii=False)})
                 if erros >= 2:            # erro de tool volta ao modelo uma vez; o segundo encerra (RN-26)

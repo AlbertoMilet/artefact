@@ -5,11 +5,25 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from difflib import SequenceMatcher
 
-Categoria = Literal["Guitarras", "Baixos", "Baterias e Percussão", "Teclados e Pianos", "Violões",
-                    "Instrumentos de Sopro (Madeiras)", "Instrumentos de Sopro (Metais)",
-                    "Cordas Orquestrais", "Ukuleles"]
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from emporio.data.normalize import compactar
+
+CATEGORIAS = ["Guitarras", "Baixos", "Baterias e Percussão", "Teclados e Pianos", "Violões",
+              "Instrumentos de Sopro (Madeiras)", "Instrumentos de Sopro (Metais)", "Cordas Orquestrais", "Ukuleles"]
+
+
+def categoria_canonica(valor: str | None) -> str | None:
+    """Tolerante a acento e a caractere corrompido pelo modelo ("Violཞs" -> "Violões", visto na Fase 5)."""
+    if valor is None or not str(valor).strip():
+        return None
+    alvo = compactar(str(valor))
+    melhor = max(CATEGORIAS, key=lambda c: SequenceMatcher(None, alvo, compactar(c)).ratio())
+    if SequenceMatcher(None, alvo, compactar(melhor)).ratio() < 0.7:
+        raise ValueError(f"categoria desconhecida: {valor!r}; válidas: {', '.join(CATEGORIAS)}")
+    return melhor
 
 
 class _Args(BaseModel):
@@ -18,12 +32,15 @@ class _Args(BaseModel):
 
 class BuscarProdutosArgs(_Args):
     texto: str | None = Field(None, description="Nome, marca, modelo ou característica, como o cliente escreveu")
-    categoria: Categoria | None = Field(None, description="Categoria do catálogo")
+    categoria: str | None = Field(None, description="Categoria do catálogo",
+                                  json_schema_extra={"enum": CATEGORIAS})
     preco_max: float | None = Field(None, gt=0, description="Preço máximo em reais (compara com o melhor preço à vista)")
     marca: str | None = Field(None, description="Marca, quando o cliente pedir uma marca específica")
     so_disponiveis: bool = Field(True, description="Só produtos à venda e com estoque. Use false para "
                                                     "checar um modelo que o cliente citou e pode estar indisponível")
     limite: int = Field(5, ge=1, le=10, description="Máximo de resultados")
+
+    _categoria = field_validator("categoria", mode="before")(categoria_canonica)
 
 
 class DetalharProdutoArgs(_Args):
