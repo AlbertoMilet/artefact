@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from emporio import modelos, preferencias
 from emporio.agent import Agente
 from emporio.data import carregar
 from emporio.llm import FakeLLMClient, LLMClient, OpenRouterClient
@@ -18,7 +19,7 @@ from emporio.rules.horario import FUSO, RelogioAjustavel, relogio_fixo, relogio_
 from emporio.tools import Toolbox
 
 RAIZ = Path(__file__).resolve().parents[2]
-MODELO_PADRAO = "deepseek/deepseek-v4.1-flash"     # D-10
+MODELO_PADRAO = modelos.PADRAO.slug                 # D-10: deepseek/deepseek-v4.1-flash
 
 
 @dataclass(frozen=True)
@@ -36,9 +37,28 @@ class Config:
     raciocinio: bool = True                      # LLM_RACIOCINIO: raciocínio estendido do modelo no agente
 
     @classmethod
-    def do_ambiente(cls, env_file: Path | None = RAIZ / ".env") -> "Config":
+    def do_ambiente(cls, env_file: Path | None = RAIZ / ".env", usar_preferencias: bool = True) -> "Config":
+        """`.env` e variáveis de ambiente; depois, as preferências salvas pelo `configurar` (se usadas)."""
         if env_file:
             load_dotenv(env_file)
+        config = cls._do_env()
+        return config.com_preferencias(preferencias.carregar()) if usar_preferencias else config
+
+    def com_preferencias(self, prefs: dict) -> "Config":
+        mudancas: dict = {}
+        if "modelo" in prefs:
+            mudancas["openrouter_model"] = prefs["modelo"]
+        if "raciocinio" in prefs:
+            mudancas["raciocinio"] = prefs["raciocinio"]
+        if "retencao" in prefs:
+            mudancas["retencao"] = replace(self.retencao, ativa=prefs["retencao"])
+        if "data_referencia" in prefs:
+            dt = datetime.fromisoformat(prefs["data_referencia"])
+            mudancas["data_referencia"] = dt if dt.tzinfo else dt.replace(tzinfo=FUSO)
+        return replace(self, **mudancas)
+
+    @classmethod
+    def _do_env(cls) -> "Config":
         ref = os.getenv("DATA_REFERENCIA")
         dt = None
         if ref:
@@ -47,7 +67,7 @@ class Config:
         return cls(
             llm_provider=os.getenv("LLM_PROVIDER", "openrouter").strip().lower(),
             openrouter_api_key=os.getenv("OPENROUTER_API_KEY", "").strip(),
-            openrouter_model=os.getenv("OPENROUTER_MODEL", MODELO_PADRAO).strip(),
+            openrouter_model=modelos.resolver(os.getenv("OPENROUTER_MODEL", MODELO_PADRAO)),
             data_dir=Path(os.getenv("EMPORIO_DATA_DIR", str(RAIZ / "data"))),
             data_referencia=dt,
             max_tool_calls=int(os.getenv("MAX_TOOL_CALLS", "5")),
@@ -73,7 +93,8 @@ def montar_llm(config: Config) -> LLMClient:
         from emporio.llm.demo import DemoLLMClient
         return DemoLLMClient()
     if config.llm_provider == "openrouter":
-        return OpenRouterClient(config.openrouter_api_key, config.openrouter_model, timeout=config.turn_timeout_s)
+        return OpenRouterClient(config.openrouter_api_key, modelos.resolver(config.openrouter_model),
+                                timeout=config.turn_timeout_s)
     raise ValueError(f"LLM_PROVIDER desconhecido: {config.llm_provider!r} (use openrouter ou fake)")
 
 

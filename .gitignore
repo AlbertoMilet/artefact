@@ -5,8 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Segredos
+# Segredos e preferências locais
 .env
+.emporio.json
 
 # Material original do processo seletivo (os dados usados pelo agente estão em data/)
 Desafio Técnico AI Engineer 2026/

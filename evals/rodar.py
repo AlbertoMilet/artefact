@@ -15,6 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from emporio.config import MODELO_PADRAO, RAIZ, Config
+from emporio.modelos import resolver
 from evals.casos import CASOS, Caso
 from emporio.rules.verificacao import mascarar_texto
 from evals.nucleo import Resultado, rodar_caso
@@ -80,7 +81,8 @@ def main() -> int:
     ap.add_argument("--saida", type=Path, default=RAIZ / "docs" / "avaliacao.md")
     ap.add_argument("--raciocinio", choices=["ligado", "desligado"], help="sobrescreve LLM_RACIOCINIO")
     a = ap.parse_args()
-    config = replace(Config.do_ambiente(), llm_provider="openrouter", openrouter_model=a.modelo)
+    config = replace(Config.do_ambiente(usar_preferencias=False), llm_provider="openrouter",
+                     openrouter_model=resolver(a.modelo))
     if a.raciocinio:
         config = replace(config, raciocinio=a.raciocinio == "ligado")
     if not config.openrouter_api_key:

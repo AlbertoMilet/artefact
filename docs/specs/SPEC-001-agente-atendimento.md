@@ -267,6 +267,7 @@ Cada critério vira um teste (U = unidade, C = conversa com o LLM falso) ou um e
 | D-11 | Tools `calcular_frete` e `consultar_promocoes` | Revisão final do Codex: a regra de frete estava testada mas fora do fluxo do agente, e campanhas eram respondidas sem consultar o CSV |
 | D-12 | Registro de solicitação em dois passos com estado na sessão | Revisão final do Codex: a confirmação era só o modelo enviando `confirmado=true` |
 | D-13 | Raciocínio estendido ligado no agente (`LLM_RACIOCINIO=true`) | Medido nos evals (3 repetições): ligado 126/126 e 2,7 s; desligado 116/126 e 2,2 s, porque sem raciocínio o modelo deixava de consultar tools de política e de loja. Nenhuma resposta vazia com o padrão. Na retenção (SPEC-002) o raciocínio fica desligado |
+| D-14 | Configuração pelo CLI (`configurar`, `/modelo`, `/config`) com três modelos ZDR: `deepseek/deepseek-v4.1-flash` (padrão), `anthropic/claude-haiku-5.5` e `openai/gpt-6.1-sol`; preferências em `.emporio.json` (padrão < `.env` < preferências < flags) | Pedido do usuário. Evals: haiku 41/42 (telefone respondido sem tool) e gpt-sol 41/42 (recusa espúria em inglês, provável filtro do endpoint Azure); nenhum com falha crítica |
 
 ### Pendências (não inventar no código)
 

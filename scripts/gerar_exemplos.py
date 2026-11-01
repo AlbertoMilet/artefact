@@ -111,7 +111,7 @@ def main() -> int:
     ap.add_argument("--modelo", default=MODELO_PADRAO)
     ap.add_argument("--so", help="gera só o roteiro cujo arquivo contém este texto")
     a = ap.parse_args()
-    config = replace(Config.do_ambiente(), llm_provider="openrouter", openrouter_model=a.modelo)
+    config = replace(Config.do_ambiente(usar_preferencias=False), llm_provider="openrouter", openrouter_model=a.modelo)
     if not config.openrouter_api_key:
         print("Defina OPENROUTER_API_KEY no .env.")
         return 2

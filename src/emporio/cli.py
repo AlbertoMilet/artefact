@@ -4,8 +4,10 @@
     python -m emporio chat --debug         mostra tools chamadas, argumentos e resultado (mascarados)
     python -m emporio chat --fake          modo demonstração, sem chave nem modelo de linguagem
     python -m emporio chat -m "oi" -m "qual o endereço?"   mensagens em sequência, sem interação
+    python -m emporio configurar           escolhe o modelo (deepseek, haiku, gpt-sol), raciocínio, retenção...
 
-Comandos durante a conversa: /novo (recomeça), /sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
+Comandos durante a conversa: /novo (recomeça), /modelo [opção] (lista ou troca o modelo), /config,
+/sair (ou Ctrl+D / Ctrl+Z+Enter no Windows).
 Com --retencao (SPEC-002): /esperar 30m | 4h | 1d simula o silêncio do cliente e mostra os lembretes;
 /janela mostra a situação da janela de 24 h.
 """
@@ -22,6 +24,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from emporio.agent import Agente, Conversa, RespostaTurno
+from emporio import cli_config
 from emporio.config import RAIZ, Config, montar_agente
 from emporio.data import DadosIndisponiveis
 from emporio.llm import LLMIndisponivel
@@ -126,15 +129,28 @@ def mostrar_janela(agente: Agente, conversa: Conversa) -> None:
                f"próxima avaliação: {proxima}\n", "2"))
 
 
-def conversar(agente: Agente, mensagens: list[str] | None, debug: bool) -> int:
+def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config: Config | None) -> bool:
+    """Comandos do chat que não vão para o modelo. True se o texto era um comando."""
+    t = texto.strip()
+    baixo = t.lower()
+    if baixo.startswith("/esperar"):
+        esperar(agente, conversa, t[len("/esperar"):], debug)
+    elif baixo == "/janela":
+        mostrar_janela(agente, conversa)
+    elif baixo.startswith("/modelo"):
+        print(_cor(cli_config.comando_modelo(agente, config or Config(), t[len("/modelo"):]) + "\n", "2"))
+    elif baixo == "/config":
+        print(_cor(cli_config.comando_config(agente, config or Config()) + "\n", "2"))
+    else:
+        return False
+    return True
+
+
+def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: Config | None = None) -> int:
     conversa: Conversa = agente.nova_conversa()
     if mensagens:
         for m in mensagens:
-            if m.lower().startswith("/esperar"):
-                esperar(agente, conversa, m[len("/esperar"):], debug)
-                continue
-            if m.lower() == "/janela":
-                mostrar_janela(agente, conversa)
+            if comando(agente, conversa, m, debug, config):
                 continue
             print(f"{_cor('Você:', '1;36')} {m}")
             mostrar(agente.responder(conversa, m), debug)
@@ -150,11 +166,7 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool) -> int:
             continue
         if texto.lower() in ("/sair", "sair", "/exit", "/quit"):
             return 0
-        if texto.lower().startswith("/esperar"):
-            esperar(agente, conversa, texto[len("/esperar"):], debug)
-            continue
-        if texto.lower() == "/janela":
-            mostrar_janela(agente, conversa)
+        if comando(agente, conversa, texto, debug, config):
             continue
         if texto.lower() == "/novo":
             conversa = agente.nova_conversa()
@@ -167,12 +179,16 @@ def main(argv: list[str] | None = None) -> int:
     for fluxo in (sys.stdout, sys.stderr):
         if hasattr(fluxo, "reconfigure"):
             fluxo.reconfigure(encoding="utf-8")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["configurar"]:
+        return cli_config.configurar(argv[1:])
     ap = argparse.ArgumentParser(prog="emporio", description="Agente de atendimento da Empório da Música")
     sub = ap.add_subparsers(dest="comando", required=True)
+    sub.add_parser("configurar", help="configura o agente: modelo (deepseek, haiku, gpt-sol), raciocínio, retenção")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")
-    chat.add_argument("--modelo", help="sobrescreve OPENROUTER_MODEL")
+    chat.add_argument("--modelo", help="deepseek, haiku, gpt-sol ou slug do OpenRouter (só nesta execução)")
     chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir; aceita /esperar e /janela)")
     chat.add_argument("--retencao", action="store_true", help="liga a retenção por inatividade (SPEC-002)")
     a = ap.parse_args(argv)
@@ -182,7 +198,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.fake:
         config = replace(config, llm_provider="fake")
     if a.modelo:
-        config = replace(config, openrouter_model=a.modelo)
+        try:
+            config = replace(config, openrouter_model=cli_config.escolher_modelo(a.modelo))
+        except ValueError as e:
+            print(f"Erro: {e}", file=sys.stderr)
+            return 2
     if a.retencao:
         config = replace(config, retencao=replace(config.retencao, ativa=True))
     try:
@@ -196,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if a.debug:
         print(_cor(f"[modelo: {agente.llm.modelo} | ZDR obrigatório | dados: {config.data_dir}]", "2"))
-    return conversar(agente, a.mensagem, a.debug)
+    return conversar(agente, a.mensagem, a.debug, config)
 
 
 if __name__ == "__main__":

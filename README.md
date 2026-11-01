@@ -39,17 +39,30 @@ uv run python -m emporio chat              # conversa interativa (/novo recomeç
 uv run python -m emporio chat --debug      # mostra as tools chamadas, os argumentos, o resultado, tokens e custo
 uv run python -m emporio chat --fake       # modo demonstração: sem chave e SEM modelo de linguagem (ver abaixo)
 uv run python -m emporio chat -m "Qual o endereço?" -m "Estão abertos agora?"   # mensagens em sequência
+uv run python -m emporio configurar        # escolhe o modelo (deepseek, haiku, gpt-sol), raciocínio, retenção e data
 ```
+
+**Configurar o agente.** `python -m emporio configurar` abre um menu; também aceita flags (`--modelo haiku --retencao ligada`, `--data-referencia 2026-03-25T10:00`, `--mostrar`, `--redefinir`). As escolhas ficam em `.emporio.json` (fora do git) e valem para as próximas conversas. Ao escolher um modelo, o configurador confere na hora, na lista pública do OpenRouter, se ele tem endpoint ZDR com tools. Durante a conversa, `/modelo` lista as opções e `/modelo haiku` troca só aquela conversa; `/config` mostra o que está valendo. Precedência: padrão < `.env` < preferências salvas < flags do comando. Evals e exemplos ignoram as preferências, para serem reproduzíveis.
+
+| Opção | Modelo (OpenRouter, sempre com ZDR) | Evals (42 casos) | Latência | Custo dos 42 casos | Observação |
+|---|---|---|---|---|---|
+| `deepseek` (padrão) | `deepseek/deepseek-v4.1-flash` | **126/126** (3 repetições) | 2,8 s | ≈ US$ 0,013 | melhor tom, o mais rápido e o mais barato; 34 endpoints ZDR |
+| `haiku` | `anthropic/claude-haiku-5.5` | 41/42 | 5,3 s | US$ 0,054 | correto e cuidadoso; a falha foi responder o telefone (certo) sem chamar a tool |
+| `gpt-sol` | `openai/gpt-6.1-sol` | 41/42 | 5,2 s | US$ 0,109 | menos tokens por conversa; recusou um pedido inocente em inglês ("I'm sorry, but I cannot assist"), como o GPT-6 Luna na Fase 0; ZDR só via Azure |
+
+Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md). Haiku e GPT-6.1 Sol rodaram uma repetição; nenhum dos três teve falha crítica.
 
 | Comando | O que faz |
 |---|---|
-| `uv run pytest` | 149 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
+| `uv run pytest` | 162 testes de unidade, de conversa e do verificador dos evals, sem rede e sem chave (~3 s) |
 | `uv run pytest -m llm` | evals com o modelo real como teste (critérios CA-16 a CA-18) |
 | `uv run python -m evals.rodar --repeticoes 3` | avaliação completa com o modelo real e relatório em `docs/avaliacao.md` |
 | `uv run python scripts/gerar_exemplos.py` | regenera os exemplos de conversa em `examples/conversas/` |
 | `uv run python scripts/perfil_dados.py` | confirma os 19 achados nos dados e gera `docs/data_quality.md` |
 | `uv run python scripts/comparar_modelos.py` | compara modelos com ZDR e gera `docs/fase0-modelos.md` |
 | `uv run python -m emporio chat --retencao` | liga a retenção por inatividade (SPEC-002): `/esperar 30m`, `/janela` |
+| `uv run python -m emporio configurar` | configura o agente: modelo (`deepseek`, `haiku`, `gpt-sol`), raciocínio, retenção, data de referência |
+| `uv run python -m evals.rodar --modelo haiku` | avalia outro modelo (apelido ou slug do OpenRouter) |
 
 **Variáveis do `.env`** (todas em `.env.example`): `LLM_PROVIDER` (`openrouter` ou `fake`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, e as opcionais `DATA_REFERENCIA` (data e hora fixas, ISO 8601, para demonstrar prazos com os pedidos de 2026), `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`) e `EMPORIO_DATA_DIR` (pasta dos CSVs; o manual fica em `src/emporio/policies/manual.md`).
 
@@ -258,7 +271,7 @@ O enunciado pede para "assumir uma interpretação razoável, documentar e segui
 
 ## Avaliação
 
-**Testes automatizados (`uv run pytest`): 149, sem rede e sem chave.**
+**Testes automatizados (`uv run pytest`): 162, sem rede e sem chave.**
 - **Unidade:** regras e tools, com valores esperados escritos à mão. Exemplos: GD20 no PIX = R$ 2.089,05; 12x de R$ 183,25; R$ 500,00 paga frete; arrependimento no 7.º dia elegível e no 8.º não.
 - **Conversa:** um LLM falso e roteirizado cobre os limites do loop, a troca de pedido (que exige nova verificação), a resposta segura, o histórico mascarado e o payload com ZDR.
 
@@ -384,6 +397,7 @@ src/emporio/
   agent/       system prompt em camadas e loop do agente
   retencao/    janela de 24 h, regras de inatividade e agente de retenção (SPEC-002)
   cli.py       python -m emporio chat
+  cli_config.py, modelos.py, preferencias.py   python -m emporio configurar, as 3 opções de modelo com ZDR e o .emporio.json
 evals/         casos, verificações críticas e runner com o modelo real
 tests/         unit/ (regras, tools, dados) · conversa/ (agente e CLI) · evals/ (pytest -m llm)
 scripts/       perfil_dados.py · comparar_modelos.py · gerar_exemplos.py

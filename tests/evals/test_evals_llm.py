@@ -11,7 +11,7 @@ pytestmark = pytest.mark.llm
 
 @pytest.fixture(scope="module")
 def resultados():
-    config = replace(Config.do_ambiente(), llm_provider="openrouter", openrouter_model=MODELO_PADRAO)
+    config = replace(Config.do_ambiente(usar_preferencias=False), llm_provider="openrouter", openrouter_model=MODELO_PADRAO)
     if not config.openrouter_api_key:
         pytest.skip("OPENROUTER_API_KEY não definida")
     from evals.casos import CASOS
