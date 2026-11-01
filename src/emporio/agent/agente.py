@@ -115,6 +115,7 @@ class Agente:
             # Voltou depois de a janela de 24 h fechar: sessão nova (SPEC-002 RI-12)
             conversa.sessao.pedido_verificado = None
             conversa.sessao.registro_proposto = None
+            conversa.sessao.atendimento_humano = False      # o encaminhamento à equipe vale só para aquela janela
         if self.retencao is not None:
             self.retencao.ao_receber(ac, texto_cliente, agora)
         else:

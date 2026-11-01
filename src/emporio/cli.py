@@ -126,7 +126,11 @@ def esperar(agente: Agente, conversa: Conversa, arg: str, debug: bool) -> None:
 def mostrar_janela(agente: Agente, conversa: Conversa) -> None:
     ac, agora = conversa.acompanhamento, agente.toolbox.relogio()
     proxima = _quando(ac.proxima_avaliacao) if ac.proxima_avaliacao else "nenhuma"
-    print(_cor(f"{janela_24h.rotulo(ac.ultima_msg_cliente, agora)} | acompanhamento: {ac.status.value}"
+    limite = ""
+    if agente.retencao is not None and ac.ultima_msg_cliente is not None:
+        from emporio.retencao.politica import limite_envio
+        limite = f" (lembretes só até {_quando(limite_envio(ac, agente.retencao.cfg))})"
+    print(_cor(f"{janela_24h.rotulo(ac.ultima_msg_cliente, agora)}{limite} | acompanhamento: {ac.status.value}"
                f"{' (' + ac.motivo + ')' if ac.motivo else ''} | lembretes neste silêncio: {len(ac.lembretes)} | "
                f"próxima avaliação: {proxima}\n", "2"))
 

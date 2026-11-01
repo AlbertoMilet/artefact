@@ -57,6 +57,7 @@ _RE_TELEFONE = re.compile(
     r"(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}"     # com DDD
     r"|9?\d{4}[-\s]\d{4}"                               # local com separador
     r"|9\d{8}"                                          # celular local sem separador
+    r"|[2-5]\d{7}"                                      # fixo local sem separador (fixos começam com 2 a 5)
     r")(?![\w-])")
 
 

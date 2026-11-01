@@ -15,7 +15,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Callable, Literal
 
 from pydantic import BaseModel, ValidationError, field_validator
 
@@ -38,7 +38,8 @@ há quanto tempo ele está em silêncio, os lembretes já enviados e quanto falt
 
 Objetivo: retomar conversas interrompidas quando houver uma razão útil e contextual, no tom da loja
 (informal mas profissional, acolhedor, como uma amiga que entende de música). Não envie mensagem só para
-provocar resposta.
+provocar resposta. O lembrete serve SÓ para continuar o atendimento que o próprio cliente começou: nada de
+promoção, oferta, novidade ou lançamento (isso exige consentimento do cliente).
 
 Decida uma ação:
 - "ENVIAR": há algo útil a dizer para retomar o ponto exato onde o cliente parou (uma dúvida sobre os produtos
@@ -50,8 +51,8 @@ Decida uma ação:
   tentativas suficientes). "mensagem" = null.
 
 Regras da mensagem (o sistema recusa a mensagem que as violar):
-- não escreva nenhum valor em reais, nem preço, parcela, estoque ou prazo, nem mesmo o orçamento que o cliente
-  citou ("até R$ 1.000"): você não consultou o sistema agora;
+- não escreva nenhum valor em reais, nem preço, parcela, estoque, disponibilidade, entrega, frete ou prazo, nem
+  mesmo o orçamento que o cliente citou ("até R$ 1.000"): você não consultou o sistema agora;
 - não ofereça desconto, reserva, cancelamento nem nada que dependa da equipe;
 - não repita um lembrete de "lembretes_anteriores" nem pergunta já respondida;
 - sem pressão nem urgência artificial.
@@ -95,7 +96,7 @@ class Decisao(BaseModel):
             return None
         try:
             return min(max(int(float(v)), 1), 1440)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):     # "Infinity", "NaN", texto
             return None
 
 
@@ -121,9 +122,10 @@ def _json(texto: str | None) -> dict | None:
 
 
 class Retencao:
-    def __init__(self, llm: LLMClient, cfg: ConfigRetencao):
+    def __init__(self, llm: LLMClient, cfg: ConfigRetencao, relogio: Callable[[], datetime] | None = None):
         self.llm = llm
         self.cfg = cfg
+        self.relogio = relogio      # relido antes do envio: a chamada ao modelo leva tempo (revisão do Codex)
         self.modo_fixo = llm.modelo.startswith("demo/")
 
     # ------------------------------------------------------------ ganchos do agente
@@ -169,7 +171,9 @@ class Retencao:
             return self._registro(ac, agora, "PARAR", decisao.motivo)
         if decisao.acao == "ENVIAR":
             problemas = politica.conferir_lembrete(decisao.mensagem, ac.lembretes)
-            b = politica.bloqueio(ac, self.cfg, agora)           # de novo antes do envio
+            if self.relogio is not None:                         # horário efetivo do envio
+                agora = max(agora, self.relogio())
+            b = politica.bloqueio(ac, self.cfg, agora, antes_do_modelo=False)   # de novo antes do envio
             if b is not None:
                 return self._aplicar_bloqueio(ac, b, agora)
             if problemas:
@@ -182,7 +186,10 @@ class Retencao:
             ac.ultima_msg_auto = agora
             ac.status = Status.ULTIMA if ultima else Status.LEMBRETE
             historico.append({"role": "assistant", "content": msg})
-            politica.agendar(ac, self.cfg, agora)
+            if ultima:      # depois da última tentativa, a próxima avaliação só registra o fechamento da janela
+                ac.proxima_avaliacao = politica.limite_envio(ac, self.cfg)
+            else:
+                politica.agendar(ac, self.cfg, agora)
             return self._registro(ac, agora, "ENVIAR", decisao.motivo, msg)
         # ESPERAR
         if ac.status == Status.ATIVO:
@@ -200,6 +207,7 @@ class Retencao:
 
     def _registro(self, ac: Acompanhamento, agora: datetime, acao: str, motivo: str,
                   mensagem: str | None = None) -> Avaliacao:
+        motivo = mascarar_texto(motivo or "")[:300]          # o motivo vem do modelo: nunca contato em claro
         av = Avaliacao(agora, acao, motivo, mensagem, ac.status.value)
         log.info(json.dumps({"evento": "retencao", "quando": agora.isoformat(), "acao": acao, "motivo": motivo,
                              "status": ac.status.value, "lembretes": len(ac.lembretes)}, ensure_ascii=False))
@@ -224,12 +232,14 @@ class Retencao:
         dados = _json(r.texto)
         try:
             return Decisao.model_validate(dados)
-        except ValidationError:
+        except (ValidationError, ValueError, TypeError):
             trecho = mascarar_texto(" ".join((r.texto or "<vazio>").split()))[:100]
             return Decisao(acao="ESPERAR", motivo=f"saida_invalida_do_modelo: {trecho!r}")
 
     def _contexto(self, ac: Acompanhamento, historico: list[dict], agora: datetime, ultima: bool) -> dict:
-        conversa = [{"de": "cliente" if m["role"] == "user" else "Lia", "texto": (m.get("content") or "")[:MAX_CHARS_MSG]}
+        # o histórico já vem mascarado; mascarar de novo na entrada do contexto é a segunda barreira (RI-13)
+        conversa = [{"de": "cliente" if m["role"] == "user" else "Lia",
+                     "texto": mascarar_texto(m.get("content") or "")[:MAX_CHARS_MSG]}
                     for m in historico if m["role"] in ("user", "assistant") and m.get("content")][-CAUDA:]
         local = agora.astimezone(FUSO)
         silencio = int((agora - ac.ultima_msg_cliente).total_seconds() // 60) if ac.ultima_msg_cliente else None

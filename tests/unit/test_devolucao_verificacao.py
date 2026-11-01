@@ -65,6 +65,8 @@ def test_mascaras():
     assert "99654" not in texto and "anacarol" not in texto
     assert "7821" in mascarar_texto("99654-7821") and "99654" not in mascarar_texto("meu tel 99654-7821")
     assert "99654" not in mascarar_texto("996547821")
+    assert "33424567" not in mascarar_texto("meu fixo 33424567")                 # fixo sem separador
+    assert mascarar_texto("total 1899 e CEP 79202-333") == "total 1899 e CEP 79202-333"
     assert mascarar_texto("protocolo SIM-20260325-0001") == "protocolo SIM-20260325-0001"
     assert mascarar_texto("rastreio BRJL5544332BR, CEP 79202-333, R$ 2.199,00") ==         "rastreio BRJL5544332BR, CEP 79202-333, R$ 2.199,00"
     assert "fulano" not in mascarar_texto("fulano@emporiodamusica.com.br")   # só o contato oficial é liberado

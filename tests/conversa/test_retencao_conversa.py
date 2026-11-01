@@ -108,3 +108,13 @@ def test_esperar_um_dia_fecha_a_janela(ambiente_cli, capsys):
     out = capsys.readouterr().out
     assert out.count("Lia (lembrete") == 2                  # modo demonstração: 2 lembretes e depois para
     assert "Janela encerrada" in out
+
+
+def test_atendimento_humano_vale_so_para_aquela_janela(catalogo, relogio, tmp_path):
+    ag, _ = montar(catalogo, relogio, tmp_path, [responder("ok"), responder("oi de novo")])
+    c = ag.nova_conversa()
+    ag.responder(c, "oi")
+    c.sessao.atendimento_humano = True
+    relogio.avancar(timedelta(hours=25))
+    ag.responder(c, "voltei")
+    assert c.sessao.atendimento_humano is False and c.acompanhamento.status == Status.ATIVO

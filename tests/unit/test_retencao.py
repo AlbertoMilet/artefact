@@ -76,7 +76,8 @@ def test_bloqueios_nao_terminais():
 
 # ---------------------------------------------------------------- pedido para parar (RI-07)
 
-@pytest.mark.parametrize("texto", ["pare de me mandar mensagem", "PARE", "Não quero mais receber isso", "me tira da lista"])
+@pytest.mark.parametrize("texto", ["pare de me mandar mensagem", "PARE", "Não quero mais receber isso", "me tira da lista",
+                                   "não quero receber mais mensagens", "não desejo receber lembretes", "pare de me enviar isso"])
 def test_quer_parar(texto):
     assert politica.quer_parar(texto)
 
@@ -103,7 +104,9 @@ def test_ci04_pedido_para_parar_encerra_sem_chamar_o_modelo():
 @pytest.mark.parametrize("texto, problema", [
     ("O Takamine GD20 está por R$ 2.199,00, quer?", "contem_valor"),
     ("Posso reservar um pra você?", "promessa:reserv"),
-    ("Consigo um desconto especial, topa?", "promessa:desconto"),
+    ("Consigo um desconto especial, topa?", "promocional:desconto"),
+    ("Temos estoque e entregamos amanhã. Quer comprar?", "informacao_comercial"),   # revisão do Codex
+    ("Aproveite a promoção de violões desta semana!", "promocional"),               # RI-15
     (" ".join(["palavra"] * 61), "longo_demais"),
     ("Quer ver? Ou prefere outro?", "mais_de_uma_pergunta"),
     ("", "vazio"),
@@ -141,6 +144,12 @@ def test_enviar_registra_no_historico_e_reagenda():
     assert llm.chamadas[0]["tools"] == []                    # lembrete não consulta tools
 
 
+def test_infinity_e_nan_viram_sem_sugestao():
+    ret = Retencao(FakeLLMClient([decisao(acao="ESPERAR", proxima_avaliacao_min="Infinity")]), CFG)
+    av = ret.avaliar(ac_novo(), list(HIST), T0 + timedelta(minutes=30))
+    assert av.acao == "ESPERAR"
+
+
 def test_ci06_saida_invalida_vira_esperar():
     ret = Retencao(FakeLLMClient([responder("vou mandar um oi pro cliente!")]), CFG)
     ac = ac_novo()
@@ -176,17 +185,69 @@ def test_parar_encerra():
     assert ac.status == Status.ENCERRADO and ac.proxima_avaliacao is None
 
 
-def test_ci07_teto_de_lembretes():
+def test_ci07_teto_de_lembretes_pela_agenda_natural():
+    cfg = ConfigRetencao(ativa=True, avaliacoes_min=(30, 60, 90, 120))
     msgs = ["Ficou alguma dúvida sobre os violões?", "Quer que eu compare dois modelos?", "Sigo por aqui se precisar."]
-    ret = Retencao(FakeLLMClient([decisao(acao="ENVIAR", mensagem=m) for m in msgs]), ConfigRetencao(ativa=True))
-    ac = ac_novo()
-    for hora in (T0 + timedelta(minutes=30), T0 + timedelta(hours=4), datetime(2026, 3, 26, 8, 0, tzinfo=FUSO)):
-        ac.proxima_avaliacao = hora
-        assert ret.avaliar(ac, list(HIST), hora).acao == "ENVIAR"
-    assert ac.status == Status.ULTIMA                       # o terceiro saiu faltando menos de 4 h
-    ac.proxima_avaliacao = datetime(2026, 3, 26, 9, 0, tzinfo=FUSO)
+    llm = FakeLLMClient([decisao(acao="ENVIAR", mensagem=m) for m in msgs])
+    ret = Retencao(llm, cfg)
+    ac = Acompanhamento(ultima_msg_cliente=T0, ultima_msg_auto=T0)
+    politica.agendar(ac, cfg, T0)
+    acoes = []
+    for _ in range(4):                                       # sem mexer na agenda: segue ac.proxima_avaliacao
+        acoes.append(ret.avaliar(ac, list(HIST), ac.proxima_avaliacao))
+    assert [a.acao for a in acoes] == ["ENVIAR", "ENVIAR", "ENVIAR", "BLOQUEADO"]
+    assert acoes[-1].motivo == "teto_de_lembretes" and ac.status == Status.ENCERRADO
+    assert len(llm.chamadas) == 3                            # o teto não gasta uma chamada ao modelo
+
+
+def test_ultima_tentativa_e_terminal_para_envios():
+    ret = Retencao(FakeLLMClient([decisao(acao="ENVIAR", mensagem="Sigo por aqui se precisar de algo.")]), CFG)
+    ac = Acompanhamento(ultima_msg_cliente=T0, ultima_msg_auto=T0)
+    ac.proxima_avaliacao = datetime(2026, 3, 26, 8, 0, tzinfo=FUSO)          # faltam 2 h para as 24 h
+    assert ret.avaliar(ac, list(HIST), ac.proxima_avaliacao).acao == "ENVIAR"
+    assert ac.status == Status.ULTIMA and ac.proxima_avaliacao == politica.limite_envio(ac, CFG)
     av = ret.avaliar(ac, list(HIST), ac.proxima_avaliacao)
-    assert av.acao == "BLOQUEADO" and av.motivo == "teto_de_lembretes" and ac.status == Status.ENCERRADO
+    assert av.motivo == "janela_fechada" and ac.status == Status.JANELA_FECHADA
+
+
+def test_ultima_tentativa_conta_da_expiracao_real():
+    ac = Acompanhamento(ultima_msg_cliente=T0)
+    assert not politica.ultima_tentativa(ac, CFG, T0 + timedelta(hours=19, minutes=30))   # antes: já contava
+    assert politica.ultima_tentativa(ac, CFG, T0 + timedelta(hours=20))
+
+
+def test_relogio_relido_antes_do_envio():
+    from emporio.rules.horario import RelogioAjustavel, relogio_fixo
+    rel = RelogioAjustavel(relogio_fixo(datetime(2026, 3, 25, 20, 59, tzinfo=FUSO)))
+
+    def modelo_lento(_mensagens):
+        rel.avancar(timedelta(minutes=2))                    # a resposta chega às 21h01 (horário silencioso)
+        return decisao(acao="ENVIAR", mensagem="Ficou alguma dúvida sobre os violões?")
+
+    ret = Retencao(FakeLLMClient([modelo_lento]), CFG, rel)
+    ac = Acompanhamento(ultima_msg_cliente=datetime(2026, 3, 25, 20, 0, tzinfo=FUSO),
+                        ultima_msg_auto=datetime(2026, 3, 25, 20, 0, tzinfo=FUSO))
+    ac.proxima_avaliacao = rel()
+    av = ret.avaliar(ac, list(HIST), rel())
+    assert av.acao == "BLOQUEADO" and av.motivo == "horario_silencioso" and ac.lembretes == []
+
+
+def test_config_invalida_e_limite_absoluto():
+    with pytest.raises(ValueError, match="margem_envio_min"):
+        ConfigRetencao(margem_envio_min=-120)
+    with pytest.raises(ValueError, match="avaliacoes_min"):
+        ConfigRetencao(avaliacoes_min=(30, 2000))
+    ac = Acompanhamento(ultima_msg_cliente=T0)
+    assert politica.bloqueio(ac, ConfigRetencao(margem_envio_min=0), T0 + timedelta(hours=24)).motivo == "janela_fechada"
+
+
+def test_motivo_e_contexto_mascarados():
+    llm = FakeLLMClient([decisao(acao="ESPERAR", motivo="cliente deu o fixo 33424567 e anacarol.ferreira@coldmail.com")])
+    ret = Retencao(llm, CFG)
+    hist = [{"role": "user", "content": "meu fixo é 33424567"}, {"role": "assistant", "content": "Anotado!"}]
+    av = ret.avaliar(ac_novo(), hist, T0 + timedelta(minutes=30))
+    assert "33424567" not in av.motivo and "anacarol" not in av.motivo
+    assert "33424567" not in llm.chamadas[0]["mensagens"][1]["content"]
 
 
 def test_cliente_responde_e_o_ciclo_recomeca():

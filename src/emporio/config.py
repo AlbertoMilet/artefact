@@ -110,7 +110,7 @@ def montar_agente(config: Config | None = None, llm: LLMClient | None = None) ->
     toolbox = Toolbox(carregar(config.data_dir), carregar_manual(), relogio, tickets_path=config.tickets_path)
     llm = llm or montar_llm(config)
     return Agente(llm, toolbox, config.max_tool_calls, config.turn_timeout_s, config.history_window,
-                  retencao=Retencao(llm, config.retencao), raciocinio=config.raciocinio,
+                  retencao=Retencao(llm, config.retencao, relogio), raciocinio=config.raciocinio,
                   alertas=CentralAlertas(Tocador(ligado=config.alerta_sonoro)) if config.alertas else None)
 
 

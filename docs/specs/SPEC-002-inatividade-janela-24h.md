@@ -1,6 +1,6 @@
 # SPEC-002: Inatividade do cliente na janela de 24 horas
 
-- **Status:** concluída (rev. 2)
+- **Status:** concluída (rev. 3): correções da revisão do Codex de 01/11/2026
 - **Data:** 2026-11-01
 - **Autor:** Alberto Milet
 - **Origem:** pedido do usuário em 01/11/2026, inspirado no agente de retenção do projeto Saúde Legal (`app/services/session_window.py`, `app/services/retention_agent.py`, `app/models/retention.py`)
@@ -44,7 +44,7 @@ Quando o cliente fica em silêncio, a Lia avalia em momentos definidos se vale r
 | Item | Por quê |
 |---|---|
 | Templates aprovados da Meta para reabrir a janela | Não há integração com WhatsApp no protótipo; fora da janela, o agente simplesmente não escreve |
-| Worker de varredura em produção, banco e reserva por versão | O protótipo roda em processo único no CLI; a função de varredura é pura e fica pronta para um agendador |
+| Worker de varredura em produção, banco e reserva por versão | O protótipo roda em processo único no CLI; a função de varredura (`Retencao.varrer`) fica pronta para um agendador. Ela não é pura: chama o modelo, altera o acompanhamento e o histórico e registra log |
 | Métricas de recuperação por etapa | Sem dados de produção |
 | Lembrete com preço, estoque ou prazo | O lembrete não chama tools; valores no lembrete são proibidos (RN-01 da SPEC-001) |
 
@@ -85,13 +85,16 @@ varredura(agora)    ──> para cada conversa com avaliação vencida:
 | RI-05 | Intervalo mínimo de 20 min desde a última mensagem automática (resposta ou lembrete) | Saúde Legal |
 | RI-06 | Horário silencioso: nada é enviado entre 21h e 8h de Campo Grande; a avaliação é reagendada para as 8h, se a janela permitir | Saúde Legal; §7.1 (acolhimento) |
 | RI-07 | Pedido para não receber mensagens ("pare", "não quero mais receber"...) é detectado em código e encerra a retenção de vez naquela conversa; a conversa continua se o cliente voltar a escrever | LGPD (§9); Saúde Legal |
-| RI-08 | O lembrete tem no máximo 60 palavras e uma pergunta, não contém valores em R$, não promete desconto, reserva nem prazo e não repete um lembrete já enviado. Mensagem que falha na conferência não é enviada | RN-01 e RN-22 da SPEC-001 |
+| RI-08 | O lembrete tem no máximo 60 palavras e uma pergunta, não contém valores em R$, não afirma estoque, entrega, frete, prazo nem parcelamento, não promete reserva ou cancelamento e não repete um lembrete já enviado. Mensagem que falha na conferência não é enviada. Limitação: é conferência por padrões, que reduz mas não elimina o risco de o modelo afirmar algo comercial com outras palavras | RN-01 e RN-22 da SPEC-001 |
 | RI-09 | Faltando até 4 h para a janela fechar, a avaliação é a última tentativa: o modelo é avisado e só envia se houver algo útil | Saúde Legal |
 | RI-10 | Saída inválida do modelo (JSON quebrado, ação desconhecida) vira ESPERAR, nunca envio | Princípio da SPEC-001: saída do LLM não autoriza ação sozinha |
 | RI-11 | Solicitação de atendimento humano registrada encerra a retenção (a equipe assume) | Q 10.2 da SPEC-001 |
 | RI-12 | Cliente que volta depois de a janela fechar começa uma sessão nova: `pedido_verificado` e `registro_proposto` expiram | RN-08 da SPEC-001 (autorização por sessão) |
 | RI-13 | O contexto enviado ao modelo é o histórico já mascarado; o lembrete passa pela mesma máscara da resposta | RN-24 da SPEC-001 |
 | RI-14 | Desligado por padrão; ligar é decisão explícita (`RETENCAO_ATIVA=true` ou `--retencao` no CLI) | Saúde Legal |
+| RI-15 | Finalidade: o lembrete só continua o atendimento que o cliente começou. Promoção, oferta, novidade ou lançamento ficam bloqueados na conferência, porque exigem consentimento explícito (§9 do manual); a retenção não registra consentimento promocional | §9 do manual; revisão do Codex |
+| RI-16 | Prazos distintos e nomeados: expiração da janela (24 h, limite absoluto), limite de envio de lembretes (expiração menos a margem) e "janela aberta" para respostas (expiração menos 60 s). A última tentativa conta da expiração real. Configuração inválida (ex.: margem negativa) é recusada | Revisão do Codex |
+| RI-17 | O relógio é relido antes do envio (a chamada ao modelo leva tempo); o teto de avaliações é conferido antes de consultar o modelo; depois da última tentativa, a próxima avaliação só registra o fechamento da janela | Revisão do Codex |
 
 ### Casos de borda
 
