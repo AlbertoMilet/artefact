@@ -73,7 +73,7 @@ def _relevancia(produto: Produto, categoria_nome: str, termos: list[str], texto_
 
 def buscar(catalogo: Catalogo, texto: str | None = None, categoria: str | None = None,
            preco_max: Decimal | None = None, marca: str | None = None, so_disponiveis: bool = True,
-           limite: int = 5) -> list[Resultado]:
+           limite: int = 5, so_promocao: bool = False) -> list[Resultado]:
     limite = max(1, min(limite, LIMITE_MAXIMO))
     termos = [t for t in normalizar(texto or "").split() if t not in PALAVRAS_VAZIAS]
     texto_compacto = "".join(termos)
@@ -91,6 +91,8 @@ def buscar(catalogo: Catalogo, texto: str | None = None, categoria: str | None =
         if so_disponiveis and disp != "disponivel":
             continue
         preco = preco_final(p, catalogo.promocoes_ativas(p.product_id))
+        if so_promocao and preco.promocao is None:
+            continue
         if preco_max is not None and preco.melhor_a_vista > Decimal(str(preco_max)):
             continue
         rel = _relevancia(p, cat_nome, termos, texto_compacto)

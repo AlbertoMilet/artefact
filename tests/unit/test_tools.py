@@ -58,8 +58,14 @@ def test_buscar_gd20_valores_formatados(tb, s):
 def test_buscar_produto_com_promocao_sem_pix(tb, s):
     r = tb.executar("buscar_produtos", {"texto": "Ohana CK-20"}, s)["resultados"][0]
     assert r["produto_id"] == 121
-    assert r["promocao"] == {"descricao": "Desconto Exclusivo", "percentual": "20%", "preco_promocional": "R$ 439,20"}
-    assert r["preco_pix"] is None
+    assert r["promocao"] == {"descricao": "Desconto Exclusivo", "percentual": "20%", "preco_promocional": "R$ 439,20",
+                             "economia": "R$ 109,80"}                  # 549,00 - 439,20, calculado pela tool
+    assert r["preco_pix"] is None and "economia_pix" not in r
+
+
+def test_economia_no_pix_vem_da_tool(tb, s):                           # RN-01: o LLM não faz a conta
+    r = tb.executar("buscar_produtos", {"texto": "Takamine GD20"}, s)["resultados"][0]
+    assert (r["preco_tabela"], r["preco_pix"], r["economia_pix"]) == ("R$ 2.199,00", "R$ 2.089,05", "R$ 109,95")
 
 
 def test_buscar_sem_resultado_orienta_e_nao_inventa(tb, s):
@@ -206,3 +212,8 @@ def test_registro_com_pedido_nao_verificado_e_recusado(tb, s):
     r = tb.executar("registrar_solicitacao", {"tipo": "devolucao", "resumo": "Quero devolver o pedido 5",
                                               "pedido_id": 5, "confirmado": True}, s)
     assert r["gravado"] is False
+
+
+def test_buscar_so_promocao_na_categoria(tb, s):
+    r = tb.executar("buscar_produtos", {"categoria": "Violões", "so_promocao": True}, s)
+    assert [x["nome"] for x in r["resultados"]] == ["Crafter HT-100 Folk Aço Natural", "Taylor 110e Dreadnought Natural"]

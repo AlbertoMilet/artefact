@@ -38,6 +38,8 @@ class BuscarProdutosArgs(_Args):
     marca: str | None = Field(None, description="Marca, quando o cliente pedir uma marca específica")
     so_disponiveis: bool = Field(True, description="Só produtos à venda e com estoque. Use false para "
                                                     "checar um modelo que o cliente citou e pode estar indisponível")
+    so_promocao: bool = Field(False, description="Só produtos com promoção ativa. Use com a categoria para achar "
+                                                 "promoções parecidas com um produto que o cliente citou")
     limite: int = Field(5, ge=1, le=10, description="Máximo de resultados")
 
     _categoria = field_validator("categoria", mode="before")(categoria_canonica)

@@ -86,3 +86,10 @@ def test_proxima_abertura():
     assert proxima_abertura(_dt(2026, 11, 6, 20, 0)) == _dt(2026, 11, 7, 9, 0)     # sexta 20h -> sábado 9h
     assert proxima_abertura(_dt(2026, 11, 7, 14, 0)) == _dt(2026, 11, 9, 9, 0)     # sábado 14h -> segunda
     assert proxima_abertura(_dt(2026, 11, 1, 10, 0)) == _dt(2026, 11, 3, 9, 0)     # domingo; segunda é Finados
+
+
+def test_so_promocao_acha_promocoes_parecidas_na_categoria(catalogo):
+    """'Tem promoção que combine com o Taylor 214ce?': os violões com promoção ativa, de qualquer marca."""
+    r = buscar(catalogo, categoria="Violões", so_promocao=True)
+    assert [(x.produto.product_id, str(x.preco.final)) for x in r] == [(90, "1967.18"), (94, "5519.08")]
+    assert buscar(catalogo, texto="Taylor 214ce", so_promocao=True) == []      # o 214ce não tem promoção ativa

@@ -170,17 +170,20 @@ class Toolbox:
             pct_txt = f"{int(pct)}%" if pct == pct.to_integral_value() else f"{pct}%".replace(".", ",")
             out["promocao"] = {"descricao": preco.promocao.description,
                                "percentual": pct_txt,
-                               "preco_promocional": brl(preco.final)}
+                               "preco_promocional": brl(preco.final),
+                               "economia": brl(preco.tabela - preco.final)}      # RN-01: a conta é do código
             out["preco_pix"] = None
             out["obs_pix"] = "o desconto do PIX não se aplica sobre preço promocional (§6.2)"
         else:
             out["preco_pix"] = brl(preco.pix)
+            out["economia_pix"] = brl(preco.tabela - preco.pix)                  # RN-01: a conta é do código
         if disp == "disponivel":
             out["estoque"] = p.stock_quantity
         return out
 
     def buscar_produtos(self, a: S.BuscarProdutosArgs, sessao: Sessao) -> dict:
-        res = buscar(self.catalogo, a.texto, a.categoria, a.preco_max, a.marca, a.so_disponiveis, a.limite)
+        res = buscar(self.catalogo, a.texto, a.categoria, a.preco_max, a.marca, a.so_disponiveis, a.limite,
+                     so_promocao=a.so_promocao)
         fortes = [r for r in res if r.relevancia >= RELEVANCIA_FORTE]
         if fortes:
             return {"resultados": [self._resumo(r) for r in fortes], "total": len(fortes)}

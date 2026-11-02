@@ -68,6 +68,8 @@ CASOS: list[Caso] = [
          [r"439,20", r"549,00", r"20 ?%"], [r"417,24"]),
     Caso("preco-pix-sobre-promocao", "preco", ["Se eu pagar o Ohana CK-20 no PIX ganho mais 5% de desconto?"],
          {"buscar_produtos", "detalhar_produto", "consultar_politicas"}, [r"n[ãa]o"], [r"417,24"]),
+    Caso("preco-promo-parecida", "preco", ["Tem alguma promoção que combine com o Taylor 214ce?"], {"buscar_produtos"},
+         [r"Crafter", r"110e", r"1\.967,18", r"5\.519,08"]),
     Caso("preco-black-friday", "preco", ["A promoção de Black Friday está valendo?"], {"consultar_promocoes"},
          [r"(n[ãa]o|nenhuma).{0,80}(ativa|vigente|valendo|dispon|acontece)"],
          [r"(?<!n[ãa]o )(?<!nao )(est[áa]|segue) (ativa|valendo)", r"volta em|termin(ou|a) em"]),
