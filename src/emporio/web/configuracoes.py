@@ -8,7 +8,6 @@ Meta, chave de cifra) ficam só no .env e nunca aparecem na tela; o PIN do Whats
 from __future__ import annotations
 
 import os
-from datetime import datetime
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,7 +17,6 @@ from emporio.agent.persona import TONS, TRATAMENTOS, Persona
 from emporio.agent.prompt import montar_prompt
 from emporio.llm import LLMIndisponivel
 from emporio.rules import origem as origem_lead
-from emporio.rules.horario import FUSO
 from emporio.tools.toolbox import LOJA
 from emporio.whatsapp import conexao as arq_whatsapp
 from emporio.whatsapp import regras as regras_whatsapp
@@ -81,7 +79,8 @@ def registrar_configuracoes(app: FastAPI, pagina, estado: dict, repo, trocar_age
     # ---------------------------------------------------------------- persona
     def ctx_persona(persona: Persona | None = None, **extra) -> dict:
         p = persona or estado["config"].persona
-        amostra = montar_prompt(datetime.now(FUSO), p).split("# Regras invioláveis")[0].strip()
+        agora = estado["agente"].toolbox.relogio()                     # o mesmo relógio do agente
+        amostra = montar_prompt(agora, p).split("# Regras invioláveis")[0].strip()
         return {"ativo": "configuracoes", "aba": "persona", "p": p, "tons": TONS, "tratamentos": TRATAMENTOS,
                 "amostra": amostra, **extra}
 

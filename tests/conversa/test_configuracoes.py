@@ -84,6 +84,13 @@ def test_salvar_modelo_grava_preferencias_e_aplica(painel):
     assert json.loads(preferencias.caminho().read_text(encoding="utf-8"))["modelo"] == "anthropic/claude-haiku-5.5"
 
 
+def test_amostra_da_persona_usa_o_relogio_do_agente(painel):
+    painel.post("/configuracoes/modelo", data={"modelo": "deepseek", "data_referencia": "2026-03-25T10:00"})
+    pagina = painel.get("/configuracoes/persona").text
+    assert "quarta-feira, 25/03/2026 10:00" in pagina
+    assert "Regras invioláveis" not in pagina and "Nunca calcule, estime" not in pagina    # só a persona
+
+
 def test_salvar_persona_vale_na_proxima_mensagem(painel):
     r = painel.post("/configuracoes/persona", data={"nome": "Rafa", "tratamento": "masculino", "tom": "profissional",
                                                     "instrucoes": "Seja breve."})
