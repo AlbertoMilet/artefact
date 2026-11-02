@@ -362,6 +362,10 @@ Usei o **Claude Code** (Claude Opus 5.5) como par de programação e o **Codex C
    - **Commit `34c6888`:** o verificador dos evals lia "R$1000" como 100. Hoje isso tem teste em `tests/unit/test_verificador_evals.py`.
    - **SPEC-013:** a avaliação de segurança do Codex achou o que a minha não achou: o login de demonstração (senha na tela) usava o banco real de conversas, e o `SameSite=Lax` não protegia de outro serviço em `localhost` noutra porta. Os dois viraram regra e teste (`tests/conversa/test_seguranca_painel.py`).
 
+6. **Ciclos de avaliação na reta final.** Um subagente avaliador releu o README contra o código seis vezes até passar de 9 (8,3 → 9,1 → 9,3 → 8,9 → 9,4 → 9,5); cada apontamento foi conferido antes de virar correção. As avaliações de LGPD, de segurança e frente ao enunciado foram feitas em paralelo pelo Claude Code e pelo Codex, sem um ver a do outro, e comparadas; daí saíram as SPEC-012 e 013.
+7. **Erros da própria IA pegos pela revisão cruzada.** O Codex achou três defeitos que o Claude Code tinha introduzido ou deixado passar: um comentário que escondia o corte da amostra da persona (a tela mostrava as regras invioláveis), a confirmação do registro que não amarrava o resumo aprovado e uma "economia de R$ 21,49" calculada pelo modelo, contra a RN-01. Os três viraram correção com teste.
+8. **Decisões que ficaram comigo.** Quando havia troca entre conveniência e risco, a IA apresentou as opções e eu escolhi; por exemplo, identificar o cliente pelo número do WhatsApp e nunca pelo telefone digitado (SPEC-011). O histórico final foi organizado com um plano do Codex: correções independentes em commits próprios e um commit de integração declarado para as specs 010 a 014, em vez de inventar versões intermediárias que nunca foram testadas.
+
 **O que funcionou:** ir rápido de spec a código testado, e a revisão cruzada entre dois modelos diferentes, que encontrou erros que o primeiro deixou passar.
 
 **O que exigiu atenção:**
