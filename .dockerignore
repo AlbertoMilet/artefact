@@ -1,0 +1,26 @@
+# Segredos e estado local: nunca na imagem
+.env
+.env.*
+!.env.example
+.emporio.json
+.emporio_whatsapp.json
+logs/
+tickets.jsonl
+
+# Ambiente e caches
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.git/
+.claude/
+
+# O que o servidor não usa
+tests/
+evals/
+examples/
+docs/
+scripts/
+img/
+Desafio Técnico AI Engineer 2026/

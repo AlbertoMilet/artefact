@@ -83,6 +83,10 @@ Os pedidos dos dados vão de out/2025 a mar/2026. Sem `DATA_REFERENCIA`, o reló
 
 **Outras variáveis:** `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`), `EMPORIO_DATA_DIR` e `LLM_PROVIDER` (`openrouter` ou `fake`). As principais estão em `.env.example`.
 
+### Deploy (Easypanel)
+
+O `Dockerfile` da raiz sobe o painel atrás do HTTPS do Easypanel, com os dados num volume `/data`. Passo a passo, variáveis e limitações em [docs/deploy-easypanel.md](docs/deploy-easypanel.md).
+
 ### Avaliação e scripts
 
 | Comando | O que faz |

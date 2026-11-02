@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import threading
 import webbrowser
@@ -72,5 +73,7 @@ def main(argv: list[str]) -> int:
     if not a.sem_navegador:
         threading.Timer(1.2, webbrowser.open, args=(url,)).start()
     uvicorn.run(criar_app(agente, config, cookies_seguros=a.https_proxy), host=a.host, port=a.porta,
-                log_level="warning", proxy_headers=a.https_proxy, forwarded_allow_ips="127.0.0.1")
+                log_level="warning", proxy_headers=a.https_proxy,
+                # de quem aceitar X-Forwarded-*: o proxy HTTPS (num contêiner, o Traefik do Easypanel)
+                forwarded_allow_ips=os.getenv("EMPORIO_PROXY_IPS", "127.0.0.1"))
     return 0
