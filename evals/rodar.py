@@ -7,6 +7,7 @@ Precisa de OPENROUTER_API_KEY. Toda chamada com ZDR (RN-23).
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -27,6 +28,20 @@ def rodar(config: Config, casos: list[Caso], repeticoes: int = 1, paralelo: int 
         return list(ex.map(lambda c: rodar_caso(config, c), tarefas))
 
 
+def versao_do_codigo() -> str:
+    """Commit avaliado, para o relatório ser reproduzível; avisa se havia alteração não commitada."""
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=RAIZ, capture_output=True,
+                                text=True, timeout=10).stdout.strip()
+        sujo = subprocess.run(["git", "status", "--porcelain", "--", "src", "evals"], cwd=RAIZ,
+                              capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "desconhecido (git indisponível)"
+    if not commit:
+        return "desconhecido (fora de um repositório git)"
+    return f"`{commit}`" + (" com alterações não commitadas em src/ ou evals/" if sujo else "")
+
+
 def relatorio(resultados: list[Resultado], modelo: str, duracao_s: float) -> str:
     por_cat: dict[str, list[Resultado]] = defaultdict(list)
     for r in resultados:
@@ -42,7 +57,8 @@ def relatorio(resultados: list[Resultado], modelo: str, duracao_s: float) -> str
         "# Avaliação do agente (Fase 5, SPEC-001)", "",
         f"Gerado por `uv run python -m evals.rodar` em {time.strftime('%Y-%m-%d %H:%M')}. "
         f"Modelo **`{modelo}`** via OpenRouter com Zero Data Retention. Relógio dos casos: quarta-feira, "
-        "25/03/2026 10:00 (dentro do período dos pedidos), salvo indicação no caso.", "",
+        "25/03/2026 10:00 (dentro do período dos pedidos), salvo indicação no caso. "
+        f"Código avaliado: commit {versao_do_codigo()}.", "",
         f"**Resultado: {ok}/{total} casos aprovados ({ok / max(total, 1):.0%}); "
         f"{criticas} com falha crítica.** Latência média por conversa {lat:.1f} s; {tokens} tokens por conversa; "
         f"{vazias} respostas vazias do modelo (tratadas com nova tentativa); custo total US$ {custo:.4f}; "
