@@ -2,6 +2,8 @@
 
 Versão curta das decisões da [SPEC-001](specs/SPEC-001-agente-atendimento.md) (§7). Cada uma traz o contexto, a decisão, as alternativas descartadas e a consequência.
 
+O registro é histórico: cada decisão descreve o momento em que foi tomada. D-01 (7 tools) e D-05 (só terminal, sem banco) foram superadas depois, com as tools de frete, promoções e pedidos pelo WhatsApp (hoje 10) e com a interface web e o histórico em SQLite (SPEC-006 e 007). O estado atual está no README.
+
 | # | Decisão | Contexto | Alternativas descartadas | Consequência |
 |---|---|---|---|---|
 | D-01 | Function calling com 7 tools tipadas, um agente, loop curto; regras em funções puras | O manual proíbe informar preço, estoque ou prazo sem consultar o sistema; os dados têm armadilhas (PIX × promoção, parcela mínima por faixa) | Agente de SQL, RAG sobre CSV, ReAct/LangGraph, multiagente | O LLM nunca faz contas; cada regra é testável isoladamente |

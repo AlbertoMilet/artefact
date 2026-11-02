@@ -14,7 +14,7 @@
 
 ```text
 buscar_produtos({"categoria":"Violões","preco_max":1000})
-  -> {"resultados": [{"produto_id": 83, "nome": "Tagima Memphis AC-39 Nylon Natural", "marca": "Tagima", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 429,90", "preco_pix": "R$ 408,41", "estoque": 15}, {"produto_id": 85, "nome": "Rozini RC-104 Nylon Estudante", "marca": "Rozini", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 459,90", "preco_…
+  -> {"resultados": [{"produto_id": 83, "nome": "Tagima Memphis AC-39 Nylon Natural", "marca": "Tagima", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 429,90", "preco_pix": "R$ 408,41", "economia_pix": "R$ 21,49", "estoque": 15}, {"produto_id": 85, "nome": "Rozini RC-104 Nylon Estudante", "marca": "Rozini", "categoria": "Violões", "disponibilidade": "disponível", "preco_t…
 
 ```
 
@@ -22,17 +22,17 @@ buscar_produtos({"categoria":"Violões","preco_max":1000})
 
 **Lia:** Oi! Eu sou a Lia, assistente virtual da Empório da Música 😊  
   
-Achei essas opções de violão até R$ 1000:  
+Achei estas opções de violão até R$ 1.000:  
   
-1. Tagima Memphis AC-39 Nylon Natural — R$ 429,90 (PIX R$ 408,41)  
-2. Rozini RC-104 Nylon Estudante — R$ 459,90 (PIX R$ 436,91)  
-3. Shelby SN-100 Folk Aço Preto — R$ 549,00 (PIX R$ 521,55)  
-4. Giannini GF-1R Aço Folk Sunburst — R$ 579,90 (PIX R$ 550,91)  
-5. Yamaha C40 Nylon Natural — R$ 599,90 (PIX R$ 569,91)  
+1. Tagima Memphis AC-39 Nylon Natural — R$ 429,90 (R$ 408,41 no PIX)  
+2. Rozini RC-104 Nylon Estudante — R$ 459,90 (R$ 436,91 no PIX)  
+3. Shelby SN-100 Folk Aço Preto — R$ 549,00 (R$ 521,55 no PIX)  
+4. Giannini GF-1R Aço Folk Sunburst — R$ 579,90 (R$ 550,91 no PIX)  
+5. Yamaha C40 Nylon Natural — R$ 599,90 (R$ 569,91 no PIX)  
   
-Quer que eu detalhe algum deles (parcelamento, especificações) ou prefere filtrar por nylon ou aço?  
+Todas estão disponíveis em estoque. Quer que eu detalhe alguma delas (especificações, parcelamento) ou precisa de mais alguma coisa?  
   
-_Você está falando com uma assistente virtual com IA. Seus dados são usados só para este atendimento._
+_Você está falando com uma assistente virtual com IA. Usamos seus dados só para atender você e acompanhar seus pedidos; a conversa passa por um provedor de IA que não guarda os dados e fica conosco por até 90 dias. Para ver ou apagar seus dados, é só pedir aqui._
 
 ---
 
@@ -42,15 +42,15 @@ _Você está falando com uma assistente virtual com IA. Seus dados são usados s
 
 ```text
 detalhar_produto({"produto_id":83})
-  -> {"produto_id": 83, "nome": "Tagima Memphis AC-39 Nylon Natural", "marca": "Tagima", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 429,90", "preco_pix": "R$ 408,41", "estoque": 15, "especificacoes": {"top": "Linden", "back_sides": "Linden", "neck": "Nato", "material_cordas": "nylon", "scale": "650mm", "electronics": "no", "color": "Natural"}, "descricao": "Violão clás…
+  -> {"produto_id": 83, "nome": "Tagima Memphis AC-39 Nylon Natural", "marca": "Tagima", "categoria": "Violões", "disponibilidade": "disponível", "preco_tabela": "R$ 429,90", "preco_pix": "R$ 408,41", "economia_pix": "R$ 21,49", "estoque": 15, "especificacoes": {"top": "Linden", "back_sides": "Linden", "neck": "Nato", "material_cordas": "nylon", "scale": "650mm", "electronics": "no", "color": "Natural"…
 
 ```
 
 </details>
 
-**Lia:** O mais barato é o Tagima Memphis AC-39 Nylon Natural (R$ 429,90). No cartão, dá pra pagar em até 5x de R$ 85,98, sem juros — total R$ 429,90.  
+**Lia:** O mais barato é o Tagima Memphis AC-39 Nylon Natural (R$ 429,90). No cartão você pode pagar em até 5x sem juros, com parcelas de R$ 85,98 — total de R$ 429,90.  
   
-Se preferir, no PIX sai por R$ 408,41. Quer saber mais alguma coisa sobre ele?
+Se preferir, no PIX ele sai por R$ 408,41. Quer saber mais alguma coisa?
 
 ---
 
@@ -58,8 +58,8 @@ Se preferir, no PIX sai por R$ 408,41. Quer saber mais alguma coisa sobre ele?
 
 **Lia:** No PIX o Tagima Memphis AC-39 Nylon Natural fica R$ 408,41 — uma economia de R$ 21,49 em relação ao preço de tabela (R$ 429,90).  
   
-Quer que eu veja o frete pra sua cidade ou algo mais?
+Quer que eu veja mais alguma coisa?
 
 ---
 
-_Custo da conversa: US$ 0.00133._
+_Custo da conversa: US$ 0.00237._
