@@ -41,7 +41,7 @@ def _rotear(texto: str) -> RespostaLLM:
     if pediu_vendedor(texto):          # a mesma detecção do alerta (SPEC-003): o aviso à equipe sai em código
         return responder("Claro! A equipe foi avisada e um vendedor fala com você em seguida. Se preferir, o "
                          f"telefone/WhatsApp é (67) 3341-4444. {AVISO}")
-    if any(k in t for k in ("endereco", "horario", "aberto", "abre", "fecha", "telefone", "contato", "whatsapp")):
+    if any(k in t for k in ("endereco", "onde fica", "localiza", "horario", "aberto", "abre", "fecha", "telefone", "contato", "whatsapp")):
         return chamar("info_loja")
     if any(k in t for k in ("devol", "arrepend", "troca", "garantia", "frete", "entrega", "parcel", "pagamento",
                             "pix", "boleto", "promoc", "dados", "corda", "palheta", "acessorio", "amplificador")):
@@ -57,7 +57,31 @@ def _rotear(texto: str) -> RespostaLLM:
     return chamar("buscar_produtos", **{k: v for k, v in args.items() if v is not None})
 
 
-def _formatar(nome: str, r: dict) -> str:
+def _info_loja(pergunta: str, r: dict) -> str:
+    """Só o que foi perguntado; o estado leva a hora considerada (o relógio pode ser a data de referência)."""
+    t = normalizar(pergunta)
+    quer_endereco = any(k in t for k in ("endereco", "onde fica", "localiza"))
+    quer_contato = any(k in t for k in ("telefone", "contato", "whatsapp"))
+    quer_horario = "horario" in t
+    quer_estado = quer_horario or any(k in t for k in ("aberto", "abre", "fecha"))
+    if not (quer_endereco or quer_contato or quer_estado):
+        quer_endereco = quer_contato = quer_horario = quer_estado = True
+    partes = []
+    if quer_endereco:
+        partes.append(f"{r['endereco']}.")
+    if quer_contato:
+        partes.append(f"Telefone/WhatsApp {r['telefone_whatsapp']}.")
+    if quer_horario:
+        partes.append(f"Horário: {r['horario']}.")
+    if quer_estado:
+        if r.get("feriado_hoje"):
+            partes.append(f"Hoje é feriado ({r['feriado_hoje']}).")
+        partes.append(f"Agora ({r['agora']}) estamos abertos." if r["aberto_agora"]
+                      else f"Agora ({r['agora']}) estamos fechados; voltamos {r['proxima_abertura']}.")
+    return " ".join(partes + [AVISO])
+
+
+def _formatar(nome: str, r: dict, pergunta: str = "") -> str:
     if "erro" in r:
         return f"Não consegui consultar agora ({r['erro']}). {AVISO}"
     if nome == "buscar_produtos":
@@ -73,8 +97,7 @@ def _formatar(nome: str, r: dict) -> str:
                 linhas.append(f"- {p['nome']}: {p['preco_tabela']} ({p.get('preco_pix')} no PIX)")
         return "Encontrei:\n" + "\n".join(linhas) + f"\n{AVISO}"
     if nome == "info_loja":
-        estado = "Estamos abertos agora." if r["aberto_agora"] else f"Agora estamos fechados; voltamos {r['proxima_abertura']}."
-        return f"{r['endereco']}. Telefone/WhatsApp {r['telefone_whatsapp']}. Horário: {r['horario']}. {estado} {AVISO}"
+        return _info_loja(pergunta, r)
     if nome == "consultar_politicas":
         if not r["trechos"]:
             return f"Aqui eu só consigo ajudar com assuntos da Empório da Música. {AVISO}"
@@ -98,7 +121,7 @@ class DemoLLMClient:
         if ultima["role"] == "tool":
             chamada = next(m for m in reversed(mensagens) if m.get("tool_calls"))
             nome = chamada["tool_calls"][-1]["function"]["name"]
-            return responder(_formatar(nome, json.loads(ultima["content"])))
+            return responder(_formatar(nome, json.loads(ultima["content"]), _ultima_do_usuario(mensagens)))
         if forcar_texto:
             return responder(f"Não consegui concluir a consulta. {AVISO}")
         return _rotear(_ultima_do_usuario(mensagens))
