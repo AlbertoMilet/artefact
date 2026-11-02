@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -62,6 +63,7 @@ class RespostaTurno:
     motivo_segura: str | None = None
     texto_bruto: str = ""             # texto do modelo antes da máscara (só em memória: evals)
     respostas_vazias: int = 0         # respostas vazias do modelo neste turno (diagnóstico)
+    pseudo_chamadas: int = 0          # respostas com chamada de tool escrita como texto (descartadas)
     alertas: list = field(default_factory=list)   # alertas para o vendedor emitidos neste turno (SPEC-003)
     origem: str | None = None         # canal do lead detectado NESTE turno (SPEC-005), para o --debug
 
@@ -69,6 +71,17 @@ class RespostaTurno:
 def _resumir(resultado: dict, limite: int = 400) -> str:
     texto = json.dumps(resultado, ensure_ascii=False)
     return texto if len(texto) <= limite else texto[:limite] + "…"
+
+
+_MARCAS_DE_CHAMADA = ("altogether", "function_calls", "function_call", "invoke", "tool_call", "tool_use",
+                      "antml", "parameter")
+
+
+def parece_chamada_de_tool(texto: str, nomes_tools) -> bool:
+    """True quando o modelo escreveu a chamada de tool como texto (ex.: `<buscar_produtos>…`) em vez de usar o
+    function calling. Esse texto nunca pode chegar ao cliente: o turno pede a resposta de novo."""
+    nomes = "|".join(re.escape(n) for n in (*nomes_tools, *_MARCAS_DE_CHAMADA))
+    return re.search(rf"<\s*/?\s*(?:{nomes})(?![\w])", texto, flags=re.IGNORECASE) is not None
 
 
 def janela(historico: list[dict], turnos: int) -> list[dict]:
@@ -161,13 +174,16 @@ class Agente:
                     break
                 if not r.tool_calls or limite:
                     texto_final = (r.texto or "").strip() or None
+                    if texto_final is not None and parece_chamada_de_tool(texto_final, self.toolbox.tools):
+                        resp.pseudo_chamadas += 1          # chamada escrita como texto: tratada como vazia
+                        texto_final = None
                     if texto_final is None:
                         resp.respostas_vazias += 1
                     if texto_final is None and vazias == 0:
                         vazias = 1            # resposta vazia: pede o texto mais uma vez (Fase 5)
                         continue
                     if texto_final is None:
-                        resp.motivo_segura = "resposta_vazia"
+                        resp.motivo_segura = "pseudo_chamada" if resp.pseudo_chamadas else "resposta_vazia"
                     break
                 novas.append(r.mensagem_assistente())
                 for call in r.tool_calls:

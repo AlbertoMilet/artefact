@@ -217,3 +217,14 @@ def test_prompt_tem_data_e_regras(toolbox):
     system = llm.chamadas[0]["mensagens"][0]["content"]
     assert "quarta-feira, 25/03/2026 10:00" in system
     assert "(67) 3341-4444" in system and "RN-01" in system
+
+
+def test_chamada_de_tool_escrita_como_texto_nao_chega_ao_cliente(toolbox):    # defeito visto nos evals
+    xml = "<altogether>\n> <buscar_produtos>\n> <texto>instrumento</texto>\n> </buscar_produtos>"
+    ag = agente(toolbox, responder(xml), responder("Não encontrei saxofone no sistema agora."))
+    r = ag.responder(ag.nova_conversa(), "Vocês têm saxofone?")
+    assert "<buscar_produtos>" not in r.texto and r.texto.startswith("Não encontrei saxofone")
+    assert r.pseudo_chamadas == 1 and not r.segura
+    teimoso = agente(toolbox, responder(xml), responder(xml))
+    r = teimoso.responder(teimoso.nova_conversa(), "Vocês têm saxofone?")
+    assert r.segura and r.motivo_segura == "pseudo_chamada" and "<" not in r.texto
