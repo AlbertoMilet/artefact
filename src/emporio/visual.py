@@ -1,4 +1,4 @@
-"""Identidade visual do terminal, a partir da logo (img/logo).
+"""Identidade visual do terminal, a partir da logo da marca (a do painel é `web/static/marca.png`).
 
 Paleta extraída da logo: verde-água da palheta-balão (#00AE9E), verde-petróleo da sombra (#017970) e
 azul-marinho da marca (#071527). Os demais tons são neutros ou de sinal (alerta, erro).

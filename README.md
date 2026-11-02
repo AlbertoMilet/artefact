@@ -249,6 +249,8 @@ O nome do perfil do WhatsApp, que o próprio cliente escreve, também é uma ent
 
 ### Ambiguidades dos dados
 
+Os arquivos de `data/` são os fornecidos pelo desafio e ficam no repositório para o projeto rodar como veio; a loja, os clientes, os telefones e os e-mails são fictícios.
+
 O enunciado pede para "assumir uma interpretação razoável, documentar e seguir em frente". Um script confirma 19 achados nos dados ([docs/data_quality.md](docs/data_quality.md)); a decisão de cada um está na SPEC-001 (regras RN-xx e decisões D-xx). Os mais relevantes:
 
 | Achado | Decisão |

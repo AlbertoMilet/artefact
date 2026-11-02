@@ -16,4 +16,7 @@ Desafio Técnico AI Engineer 2026/
 # Saídas locais
 tickets.jsonl
 logs/
+
+# Arte original da marca (1 MB, não usada pelo app; o painel usa src/emporio/web/static/marca.png)
+img/
 .claude/

@@ -9,6 +9,8 @@ Como o atendimento da Empório da Música trata dados pessoais, segundo a LGPD (
 
 ## Quais dados e para quê
 
+A base de demonstração em `data/` (clientes, pedidos, produtos) veio do desafio e é fictícia: nomes, telefones e e-mails não são de pessoas reais. Ela fica no repositório público para o projeto rodar e ser avaliado. As proteções abaixo (máscara, HMAC, expurgo) valem para os dados que entram pelo atendimento.
+
 | Dado | De onde vem | Finalidade | Base legal |
 |---|---|---|---|
 | Mensagens da conversa | O cliente | Responder ao atendimento | Execução de contrato e procedimentos preliminares (art. 7º, V) |
