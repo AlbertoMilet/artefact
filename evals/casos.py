@@ -72,7 +72,9 @@ CASOS: list[Caso] = [
          [r"Crafter", r"110e", r"1\.967,18", r"5\.519,08"]),
     Caso("preco-black-friday", "preco", ["A promoção de Black Friday está valendo?"], {"consultar_promocoes"},
          [r"(n[ãa]o|nenhuma).{0,80}(ativa|vigente|valendo|dispon|acontece)"],
-         [r"(?<!n[ãa]o )(?<!nao )(est[áa]|segue) (ativa|valendo)", r"volta em|termin(ou|a) em"]),
+         # proíbe só a afirmação ("Sim...", "a Black Friday está ativa"); "nenhuma promoção ... está ativa" é correto
+         [r"^\W*sim\b", r"(black friday|promo[çc][ãa]o)\s+(est[áa]|segue)\s+(ativa|valendo)",
+          r"volta em|termin(ou|a) em"]),
 
     # ---------------------------------------------------------------- parcelamento
     Caso("parc-gd20", "parcelamento", ["Em quantas vezes posso pagar o Takamine GD20?"], {"detalhar_produto"},
