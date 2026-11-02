@@ -19,7 +19,11 @@ from emporio.llm.base import LLMClient, LLMIndisponivel, RespostaLLM
 from emporio.retencao import janela as janela_24h
 from emporio.retencao.agente import Retencao
 from emporio.retencao.modelos import Acompanhamento
+from emporio.alertas.central import Alerta
+from emporio.rules import midia
 from emporio.rules import origem as origem_lead
+from emporio.rules.horario import relogio_real
+from emporio.rules.nome_cliente import primeiro_nome
 from emporio.rules.verificacao import mascarar_texto
 from emporio.tools.toolbox import LOJA, Sessao, Toolbox
 
@@ -84,6 +88,12 @@ def parece_chamada_de_tool(texto: str, nomes_tools) -> bool:
     return re.search(rf"<\s*/?\s*(?:{nomes})(?![\w])", texto, flags=re.IGNORECASE) is not None
 
 
+def definir_nome(sessao: Sessao, nome_perfil: str) -> None:
+    """Nome do perfil do WhatsApp na sessão (SPEC-010), sempre pelo filtro de `primeiro_nome`."""
+    sessao.nome_cliente = primeiro_nome(nome_perfil)
+    sessao.perfil_sem_nome = sessao.nome_cliente is None
+
+
 def janela(historico: list[dict], turnos: int) -> list[dict]:
     """Últimos `turnos` turnos do cliente, cortando sempre numa mensagem de usuário
     (nunca deixa resultado de tool sem a chamada que o originou)."""
@@ -120,8 +130,59 @@ class Agente:
     def nova_conversa(self) -> Conversa:
         return Conversa()
 
-    def responder(self, conversa: Conversa, texto_cliente: str) -> RespostaTurno:
+    def identificar(self, conversa: Conversa, nome_perfil: str | None = None,
+                    telefone_remetente: str | None = None) -> None:
+        """Quem é o cliente, com os dados que o canal manda junto da mensagem (SPEC-010 e SPEC-011).
+
+        Nome, em ordem de preferência: o do cadastro (cliente identificado pelo número do WhatsApp), o do perfil
+        do WhatsApp e, sem nenhum, a Lia pergunta como chamar. None em um argumento = o canal não o informou."""
+        s = conversa.sessao
+        if telefone_remetente is not None:
+            s.cliente_canal = self.toolbox.cliente_do_canal(telefone_remetente)
+        if nome_perfil is not None:
+            definir_nome(s, nome_perfil)
+            s.nome_do_cadastro = False
+        cadastro = self.toolbox.primeiro_nome_do_cliente(s.cliente_canal)
+        if cadastro:                                   # RP-08: o cadastro vence o perfil
+            s.nome_cliente, s.perfil_sem_nome, s.nome_do_cadastro = cadastro, False, True
+        elif s.nome_do_cadastro:                       # deixou de ser identificado: o nome do cadastro sai
+            s.nome_cliente, s.nome_do_cadastro = None, False
+
+    def receber_midia(self, conversa: Conversa, tipo: str) -> RespostaTurno:
+        """SPEC-014: foto, áudio, vídeo ou documento. Resposta fixa, sem LLM; o histórico guarda só o marcador.
+
+        Chame `identificar` antes, como em `responder`, se o canal mandou número e nome."""
+        tipo = midia.validar(tipo)
+        agora = self.toolbox.relogio()
+        primeira = conversa.turnos == 0
+        conversa.turnos += 1
+        conversa.sessao.turno = conversa.turnos
+        marcador = midia.marcador(tipo)
+        if self.retencao is not None:
+            self.retencao.ao_receber(conversa.acompanhamento, marcador, agora)
+        else:
+            conversa.acompanhamento.ultima_msg_cliente = agora
+        texto = midia.resposta(tipo, LOJA["telefone_whatsapp"])
+        conversa.historico.append({"role": "user", "content": marcador})
+        conversa.historico.append({"role": "assistant", "content": texto})
+        resp = RespostaTurno(texto=f"{texto}\n\n{AVISO_PRIVACIDADE}" if primeira else texto)   # RM-04
+        s = conversa.sessao
+        if midia.precisa_da_equipe(s.pedido_verificado, s.registro_proposto, s.registros):          # RM-05
+            alerta = Alerta("midia", f"cliente enviou {midia.TIPOS[tipo][0]} durante um atendimento de pedido "
+                                     "ou solicitação", conversa.id, agora.isoformat(), trecho=marcador,
+                            origem=s.origem)
+            if self.alertas is not None:
+                self.alertas.emitir([alerta])
+            resp.alertas = [alerta]
+        return resp
+
+    def responder(self, conversa: Conversa, texto_cliente: str, nome_perfil: str | None = None,
+                  telefone_remetente: str | None = None) -> RespostaTurno:
+        """`nome_perfil`: nome do perfil do WhatsApp que chega com a mensagem (SPEC-010). None = o canal não
+        informou o perfil (mantém o atual); "" ou um perfil sem nome usável = a Lia pergunta como chamar.
+        `telefone_remetente`: número do WhatsApp entregue pelo canal (SPEC-011); só o customer_id fica na sessão."""
         inicio = time.perf_counter()
+        self.identificar(conversa, nome_perfil, telefone_remetente)
         primeira = conversa.turnos == 0
         conversa.turnos += 1
         conversa.sessao.turno = conversa.turnos
@@ -148,7 +209,10 @@ class Agente:
         if self.alertas is not None:      # pedido de vendedor alerta já na entrada, sem esperar o modelo
             pedidos = self.alertas.avaliar_pedido(conversa.id, texto_cliente, agora, origem=conversa.sessao.origem)
             self.alertas.emitir(pedidos)
-        system = {"role": "system", "content": montar_prompt(self.toolbox.relogio(), self.persona)}
+        system = {"role": "system", "content": montar_prompt(self.toolbox.relogio(), self.persona,
+                                                            conversa.sessao.nome_cliente,
+                                                            conversa.sessao.perfil_sem_nome,
+                                                            conversa.sessao.nome_do_cadastro)}
         novas: list[dict] = [{"role": "user", "content": texto_cliente}]
         tools = self.toolbox.schemas_openai()
         resp = RespostaTurno(texto="", origem=origem_turno)
@@ -234,7 +298,8 @@ class Agente:
 
     def _registrar_log(self, conversa: Conversa, resp: RespostaTurno) -> None:
         log.info(json.dumps({
-            "evento": "turno", "conversa": conversa.id, "turno": conversa.turnos, "modelo": self.llm.modelo,
+            "evento": "turno", "registrado_em": relogio_real().isoformat(timespec="seconds"),   # SPEC-012 RL-01
+            "conversa": conversa.id, "turno": conversa.turnos, "modelo": self.llm.modelo,
             "tools": [{"tool": e.tool, "args": e.argumentos, "ms": e.duracao_ms, "erro": e.erro} for e in resp.rastro],
             "tokens_entrada": resp.tokens_entrada, "tokens_saida": resp.tokens_saida,
             "custo_usd": round(resp.custo_usd, 6), "latencia_s": round(resp.latencia_s, 2),

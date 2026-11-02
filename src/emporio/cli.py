@@ -32,6 +32,8 @@ from emporio import cli_config
 from emporio.config import RAIZ, Config, montar_agente
 from emporio.data import DadosIndisponiveis
 from emporio.llm import LLMIndisponivel
+from emporio.privacidade import FormatoMascarado
+from emporio.rules import midia
 from emporio.retencao import janela as janela_24h
 from emporio.rules import origem as origem_lead
 from emporio.rules.horario import FUSO
@@ -75,7 +77,7 @@ def configurar_log(pasta: Path) -> None:
     turno.addHandler(h)
     turno.propagate = False
     avisos = logging.FileHandler(pasta / "avisos.log", encoding="utf-8")
-    avisos.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    avisos.setFormatter(FormatoMascarado("%(asctime)s %(levelname)s %(name)s: %(message)s"))   # SPEC-012
     avisos._emporio = True
     raiz = logging.getLogger()
     raiz.setLevel(logging.WARNING)
@@ -162,7 +164,10 @@ def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config:
     """Comandos do chat que não vão para o modelo. True se o texto era um comando."""
     t = texto.strip()
     baixo = t.lower()
-    if baixo.startswith("/esperar"):
+    if baixo.lstrip("/") in ("foto", "audio", "áudio", "video", "vídeo", "documento") and baixo.startswith("/"):
+        print(f"{estilo.cliente()} {midia.marcador(baixo.lstrip('/'))}")          # SPEC-014
+        mostrar(agente.receber_midia(conversa, baixo.lstrip("/")), debug)
+    elif baixo.startswith("/esperar"):
         esperar(agente, conversa, t[len("/esperar"):], debug)
     elif baixo == "/janela":
         mostrar_janela(agente, conversa)
@@ -184,14 +189,15 @@ def comando(agente: Agente, conversa: Conversa, texto: str, debug: bool, config:
     return True
 
 
-def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: Config | None = None) -> int:
+def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: Config | None = None,
+              nome: str | None = None, telefone: str | None = None) -> int:
     conversa: Conversa = agente.nova_conversa()
     if mensagens:
         for m in mensagens:
             if comando(agente, conversa, m, debug, config):
                 continue
             print(f"{estilo.cliente()} {m}")
-            mostrar(agente.responder(conversa, m), debug)
+            mostrar(agente.responder(conversa, m, nome_perfil=nome, telefone_remetente=telefone), debug)
         return 0
     print(estilo.banner(agente.llm.modelo))
     while True:
@@ -210,7 +216,7 @@ def conversar(agente: Agente, mensagens: list[str] | None, debug: bool, config: 
             conversa = agente.nova_conversa()
             print(_cor("(nova conversa)\n"))
             continue
-        mostrar(agente.responder(conversa, texto), debug)
+        mostrar(agente.responder(conversa, texto, nome_perfil=nome, telefone_remetente=telefone), debug)
 
 
 def aviso_vendedor(alerta) -> None:
@@ -273,16 +279,22 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["origem"]:
         from emporio import cli_origem
         return cli_origem.main(argv[1:])
+    if argv[:1] == ["privacidade"]:
+        from emporio import privacidade
+        return privacidade.main(argv[1:])
     ap = argparse.ArgumentParser(prog="emporio", description="Agente de atendimento da Empório da Música")
     sub = ap.add_subparsers(dest="comando", required=True)
     sub.add_parser("configurar", help="configura o agente: modelo (deepseek, haiku, gpt-sol), raciocínio, retenção")
     sub.add_parser("vendedor", help="vigia de alertas para o vendedor (outro terminal)")
     sub.add_parser("whatsapp", help="conecta o WhatsApp da loja: login com Facebook e código por SMS (SPEC-004)")
     sub.add_parser("origem", help="links por canal e relatório de origem dos leads (SPEC-005)")
+    sub.add_parser("privacidade", help="LGPD: expurgo por prazo e auditoria do painel (SPEC-012)")
     sub.add_parser("ui", help="interface web do atendimento (padrão sem argumentos; SPEC-006)")
     sub.add_parser("usuario", help="usuários do painel: criar, segredo, listar (SPEC-008)")
     chat = sub.add_parser("chat", help="conversar com o agente")
     chat.add_argument("--debug", action="store_true", help="mostra o rastro de tools e fontes")
+    chat.add_argument("--nome", help="nome no perfil do WhatsApp do cliente simulado (SPEC-010)")
+    chat.add_argument("--telefone", help="número do WhatsApp do remetente simulado (SPEC-011)")
     chat.add_argument("--fake", action="store_true", help="modo demonstração sem modelo (LLM_PROVIDER=fake)")
     chat.add_argument("--modelo", help="deepseek, haiku, gpt-sol ou slug do OpenRouter (só nesta execução)")
     chat.add_argument("-m", "--mensagem", action="append", help="mensagem não interativa (pode repetir; aceita /esperar e /janela)")
@@ -321,7 +333,8 @@ def main(argv: list[str] | None = None) -> int:
         agente.alertas.avisar = aviso_vendedor
     if a.debug:
         print(_cor(f"[modelo: {agente.llm.modelo} | ZDR obrigatório | dados: {config.data_dir}]"))
-    return conversar(agente, a.mensagem, a.debug, config)
+    return conversar(agente, a.mensagem, a.debug, config, nome=getattr(a, "nome", None),
+                     telefone=getattr(a, "telefone", None))
 
 
 if __name__ == "__main__":

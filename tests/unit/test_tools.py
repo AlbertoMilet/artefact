@@ -7,6 +7,7 @@ import pytest
 
 from emporio.policies import carregar_manual
 from emporio.rules.horario import FUSO, relogio_fixo
+from emporio.rules.verificacao import cliente_do_telefone
 from emporio.tools import Sessao, Toolbox
 
 TEL_CLIENTE_2 = "(67) 99654-7821"     # pedido 8 (enviado), cliente 2
@@ -26,7 +27,7 @@ def s():
 
 def test_schemas_openai_validos(tb):
     nomes = [t["function"]["name"] for t in tb.schemas_openai()]
-    assert nomes == ["buscar_produtos", "detalhar_produto", "consultar_pedido", "verificar_arrependimento",
+    assert nomes == ["buscar_produtos", "detalhar_produto", "consultar_pedido", "meus_pedidos", "verificar_arrependimento",
                      "consultar_politicas", "info_loja", "calcular_frete", "consultar_promocoes",
                      "registrar_solicitacao"]
     for t in tb.schemas_openai():
@@ -167,8 +168,8 @@ def test_ca13_registro_so_com_confirmacao(tb, s):
     # confirmar sem proposta anterior é recusado
     r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "Chegou riscado", "confirmado": True}, s)
     assert r["gravado"] is False
-    r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "Instrumento chegou riscado",
-                                              "confirmado": False}, s)
+    r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "confirmado": False,
+                                              "resumo": "Instrumento chegou riscado, contato (67) 99654-7821"}, s)
     assert r["gravado"] is False and r["resumo_para_confirmar"] and not tb.tickets_path.exists()
     # mesma mensagem do cliente: ainda não houve confirmação
     r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "resumo": "x" * 10, "confirmado": True}, s)
@@ -177,12 +178,15 @@ def test_ca13_registro_so_com_confirmacao(tb, s):
     r = tb.executar("registrar_solicitacao", {"tipo": "troca", "resumo": "outro tipo", "confirmado": True}, s)
     assert r["gravado"] is False                          # tipo diferente do proposto
     r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "confirmado": True,
-                                              "resumo": "Instrumento chegou riscado, contato (67) 99654-7821"}, s)
+                                              "resumo": "Cliente quer reembolso integral imediato"}, s)
+    assert r["gravado"] is False and r["erro"] == "proposta_alterada"   # não grava o que o cliente não aprovou
+    r = tb.executar("registrar_solicitacao", {"tipo": "reclamacao", "confirmado": True}, s)   # sem resumo
     assert r["gravado"] and r["protocolo_simulado"] == "SIM-20260325-0001"
     assert "SIM-20260325-0001" in json.dumps(r)            # protocolo não é corrompido pela máscara
     assert s.registro_proposto is None                    # autorização consumida
     linha = json.loads(tb.tickets_path.read_text(encoding="utf-8"))
     assert "99654" not in linha["resumo"] and linha["simulado"] is True
+    assert linha["resumo"].startswith("Instrumento chegou riscado")       # o resumo aprovado, não outro
 
 
 def test_calcular_frete(tb, s):
@@ -214,6 +218,97 @@ def test_registro_com_pedido_nao_verificado_e_recusado(tb, s):
     assert r["gravado"] is False
 
 
+# ---------------------------------------------------------------- pedidos pelo número do WhatsApp (SPEC-011)
+
+TEL_PEDRO = "(67) 98432-1098"         # cliente 3: pedidos 1 (15/10/2025) e 19 (22/02/2026)
+
+
+@pytest.mark.parametrize("telefone, esperado", [
+    (TEL_PEDRO, 3), ("67984321098", 3), ("+55 67 98432-1098", 3), ("5567984321098", 3),
+    ("98432-1098", None),                 # RP-02: sem DDD não basta
+    ("(11) 98432-1098", None), ("(67) 90000-0000", None), ("", None), (None, None),
+])
+def test_cliente_do_canal(tb, telefone, esperado):
+    assert tb.cliente_do_canal(telefone) == esperado
+
+
+def test_cliente_do_telefone_ambiguo_nao_identifica(catalogo):      # RP-03
+    c = catalogo.clientes[3]
+    assert cliente_do_telefone([c, c.model_copy(update={"customer_id": 99})], TEL_PEDRO) is None
+
+
+def test_meus_pedidos_do_mais_recente_para_o_mais_antigo(tb, s):     # CP-01, RP-05
+    s.cliente_canal = tb.cliente_do_canal(TEL_PEDRO)
+    r = tb.executar("meus_pedidos", {}, s)
+    assert r["identificado"] and r["cliente_primeiro_nome"] == "Pedro" and r["total_de_pedidos"] == 2
+    assert [(p["pedido_id"], p["data_pedido"], p["status"], p["total_registrado"]) for p in r["pedidos"]] == [
+        (19, "22/02/2026", "cancelado", "R$ 7.499,00"), (1, "15/10/2025", "entregue", "R$ 11.499,00")]
+    assert all(p["itens"] for p in r["pedidos"])
+    texto = json.dumps(r, ensure_ascii=False)
+    assert "98432" not in texto and "@" not in texto                  # CP-04: nada de telefone ou e-mail
+
+
+def test_meus_pedidos_sem_identificacao(tb, s):                      # CP-03, RP-07
+    r = tb.executar("meus_pedidos", {}, s)
+    assert r == {"identificado": False, "mensagem": r["mensagem"]} and "número do pedido" in r["mensagem"]
+
+
+def test_pedido_do_dono_do_numero_dispensa_verificacao(tb, s):       # CP-02, RP-06
+    s.cliente_canal = tb.cliente_do_canal(TEL_PEDRO)
+    assert tb.executar("consultar_pedido", {"pedido_id": 1}, s)["autorizado"] is True
+    assert s.pedido_verificado == 1
+    assert tb.executar("consultar_pedido", {"pedido_id": 8}, s)["autorizado"] is False          # de outra cliente
+    assert tb.executar("consultar_pedido", {"pedido_id": 8, "verificacao": TEL_CLIENTE_2}, s)["autorizado"] is True
+    assert tb.executar("verificar_arrependimento", {"pedido_id": 1}, s)["autorizado"] is False  # 8 é o verificado
+    assert tb.executar("consultar_pedido", {"pedido_id": 1}, s)["autorizado"] is True           # volta ao seu
+
+
+# ---------------------------------------------------------------- LGPD (SPEC-012)
+
+def test_pedido_de_privacidade_com_prazo_de_15_dias(tb, s):                 # CL-05, RL-04
+    s.turno = 1
+    r = tb.executar("registrar_solicitacao", {"tipo": "privacidade", "confirmado": False,
+                                              "resumo": "Cliente pede a exclusão dos seus dados pessoais"}, s)
+    assert r["gravado"] is False and r["prazo_resposta"] == "até 15 dias"
+    s.turno = 2
+    r = tb.executar("registrar_solicitacao", {"tipo": "privacidade", "confirmado": True,
+                                              "resumo": "Cliente pede a exclusão dos seus dados pessoais"}, s)
+    assert r["gravado"] is True and r["texto_para_cliente"].endswith("A equipe responde em até 15 dias.")
+    assert json.loads(tb.tickets_path.read_text(encoding="utf-8"))["tipo"] == "privacidade"
+
+
+def test_devolucao_negada_oferece_revisao(tb, s):                           # RL-10
+    tb.executar("consultar_pedido", {"pedido_id": 5, "verificacao": TEL_CLIENTE_5}, s)
+    fora = tb.executar("verificar_arrependimento", {"pedido_id": 5, "data_recebimento": "2026-03-10", "canal": "online"}, s)
+    loja = tb.executar("verificar_arrependimento", {"pedido_id": 5, "data_recebimento": "2026-03-20", "canal": "loja"}, s)
+    dentro = tb.executar("verificar_arrependimento", {"pedido_id": 5, "data_recebimento": "2026-03-20", "canal": "online"}, s)
+    assert "revisão do caso pela equipe" in fora["orientacao"] and "revisão do caso pela equipe" in loja["orientacao"]
+    assert "revisão" not in dentro["orientacao"]
+
+
 def test_buscar_so_promocao_na_categoria(tb, s):
     r = tb.executar("buscar_produtos", {"categoria": "Violões", "so_promocao": True}, s)
     assert [x["nome"] for x in r["resultados"]] == ["Crafter HT-100 Folk Aço Natural", "Taylor 110e Dreadnought Natural"]
+
+
+def test_tentativas_de_verificacao_limitadas_por_sessao(tb, s):            # SPEC-013 CS-06, RS-06
+    for _ in range(5):
+        r = tb.executar("consultar_pedido", {"pedido_id": 8, "verificacao": "(67) 90000-0000"}, s)
+        assert r["autorizado"] is False and "erro" not in r
+    r = tb.executar("consultar_pedido", {"pedido_id": 8, "verificacao": TEL_CLIENTE_2}, s)   # agora com o certo
+    assert r["autorizado"] is False and r["erro"] == "muitas_tentativas"
+    s.cliente_canal = tb.cliente_do_canal(TEL_PEDRO)                   # o dono do número segue com acesso
+    assert tb.executar("consultar_pedido", {"pedido_id": 1, "verificacao": "x" * 8}, s)["autorizado"] is True
+
+
+def test_confirmacao_aceita_o_mesmo_resumo_e_recusa_outro_pedido(tb, s):
+    tb.executar("consultar_pedido", {"pedido_id": 5, "verificacao": TEL_CLIENTE_5}, s)
+    s.turno = 1
+    tb.executar("registrar_solicitacao", {"tipo": "devolucao", "resumo": "Devolução do pedido 5", "pedido_id": 5,
+                                          "confirmado": False}, s)
+    s.turno = 2
+    r = tb.executar("registrar_solicitacao", {"tipo": "devolucao", "resumo": "  Devolução do  pedido 5 ",
+                                              "pedido_id": 5, "confirmado": True}, s)
+    assert r["gravado"] is True                                         # só espaços diferentes: é o mesmo
+    assert tb.executar("registrar_solicitacao", {"tipo": "devolucao", "confirmado": False}, s)["erro"] == \
+        "resumo_obrigatorio"

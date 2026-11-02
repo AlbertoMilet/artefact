@@ -2,17 +2,19 @@
 {% block title %}Simulador de WhatsApp · Empório da Música{% endblock %}
 {% block content %}
 <h1 class="h4 mb-1">Simulador de WhatsApp</h1>
-<p class="small text-body-secondary">Você é o cliente. As mensagens chegam ao agente como chegariam pelo WhatsApp; o cliente é identificado pelo telefone (guardado só mascarado). Cada resposta mostra as tools usadas. Quando um vendedor assume a conversa no <a href="/atendimento">Atendimento</a>, as respostas dele aparecem aqui.</p>
+<p class="small text-body-secondary">Você é o cliente. As mensagens chegam ao agente como chegariam pelo WhatsApp; o cliente é identificado pelo telefone (guardado só mascarado) e, se houver, chamado pelo primeiro nome do perfil. Cada resposta mostra as tools usadas. Quando um vendedor assume a conversa no <a href="/atendimento">Atendimento</a>, as respostas dele aparecem aqui.</p>
 {% if erro %}<div class="alert alert-warning py-2">{{ erro }}</div>{% endif %}
-<form class="d-flex flex-wrap gap-2 mb-2" method="get" action="/simulador">
+<form class="d-flex flex-wrap gap-2 mb-2" method="post" action="/simulador/cliente">
   <label class="visually-hidden" for="telefone">Telefone do cliente</label>
   <input id="telefone" class="form-control form-control-sm w-auto" name="telefone" value="{{ telefone }}">
+  <label class="visually-hidden" for="nome">Nome no perfil do WhatsApp</label>
+  <input id="nome" class="form-control form-control-sm w-auto" name="nome" value="{{ nome_perfil }}" maxlength="60" placeholder="Nome no perfil (opcional)">
   <button class="btn btn-sm btn-outline-secondary">Trocar de cliente</button>
 </form>
 {% include "_simulador.html" %}
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
   // Mostra a mensagem do cliente na hora, antes de o agente responder.
   document.body.addEventListener("htmx:beforeRequest", (e) => {
     if (e.detail.requestConfig.verb !== "post") return;

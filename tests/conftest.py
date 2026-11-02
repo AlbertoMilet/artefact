@@ -37,6 +37,10 @@ def alertas_isolados(monkeypatch, tmp_path):
 def atendimento_isolado(monkeypatch, tmp_path):
     """Testes não leem nem gravam o histórico real do painel de atendimento."""
     monkeypatch.setenv("EMPORIO_DB", str(tmp_path / "atendimento.db"))
+    monkeypatch.setenv("EMPORIO_DB_DEMO", str(tmp_path / "demo.db"))
+    monkeypatch.setenv("EMPORIO_LOG_TURNOS", str(tmp_path / "emporio.jsonl"))
+    monkeypatch.setenv("EMPORIO_LOG_AVISOS", str(tmp_path / "avisos.log"))
+    monkeypatch.delenv("EMPORIO_CHAVE_TELEFONE", raising=False)
     monkeypatch.delenv("EMPORIO_USUARIOS", raising=False)
     monkeypatch.delenv("EMPORIO_SEGREDO_SESSAO", raising=False)
 

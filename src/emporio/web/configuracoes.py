@@ -165,7 +165,8 @@ def registrar_configuracoes(app: FastAPI, pagina, estado: dict, repo, trocar_age
                     state = regras_whatsapp.novo_state()
                     if modo == "real":
                         resposta = RedirectResponse(ob.p.url_login(state), status_code=303)
-                        resposta.set_cookie(COOKIE_STATE, state, httponly=True, samesite="lax", max_age=600)
+                        resposta.set_cookie(COOKIE_STATE, state, httponly=True, samesite="lax", max_age=600,
+                                            secure=request.url.scheme == "https")
                         return resposta
                     ob.autenticar("codigo-oauth-simulado", state, state, escolher_waba=lambda ws: ws[0])
                     ok = "Login com Facebook concluído (simulado)."

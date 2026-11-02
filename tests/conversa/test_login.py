@@ -10,6 +10,7 @@ from emporio.config import Config, montar_agente
 from emporio.web import criar_app
 from emporio.web.auth import Limitador, Sessoes, carregar_usuarios, conferir_senha, hash_senha
 from emporio.web.repositorio import Repositorio
+from tests.apoio import com_csrf
 
 HASH = hash_senha("senha-forte-1", iteracoes=1000)
 
@@ -42,8 +43,8 @@ def test_sessao_assinada_e_com_validade():
     s = Sessoes(b"s" * 32, duracao_s=60, relogio=lambda: agora[0])
     token = s.emitir("carlos")
     assert s.validar(token) == "carlos"
-    _, exp, ass = token.split(".")
-    assert s.validar(f"YW5h.{exp}.{ass}") is None                                  # trocar o usuário invalida
+    _, exp, sid, imp, ass = token.split(".")
+    assert s.validar(f"YW5h.{exp}.{sid}.{imp}.{ass}") is None                      # trocar o usuário invalida
     assert Sessoes(b"o" * 32).validar(token) is None                               # outro segredo
     assert s.validar("lixo") is None
     agora[0] += 61
@@ -67,8 +68,12 @@ def test_entrar_sair_e_voltar_para_a_pagina_pedida(tmp_path):
                follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/simulador"
     assert "carlos" in c.get("/atendimento").text
-    c.post("/sair")
+    cookie = c.cookies.get("emporio_sessao")
+    assert c.post("/sair").status_code == 403                                        # sem token CSRF, nada
+    com_csrf(c).post("/sair")
     assert c.get("/atendimento", follow_redirects=False).status_code == 303
+    c.cookies.set("emporio_sessao", cookie)                                         # SPEC-013 CS-04: cookie antigo
+    assert c.get("/atendimento", follow_redirects=False).status_code == 303          # foi revogado
 
 
 def test_redirecionamento_aberto_bloqueado(tmp_path):

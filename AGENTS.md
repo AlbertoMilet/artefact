@@ -7,6 +7,11 @@
 - SPEC-009 (configurações): a persona muda só identidade e tom (`emporio.agent.persona`); a persona padrão tem de gerar o mesmo prompt dos evals; regras invioláveis não são editáveis.
 - SPEC-008 (login): senha nunca em claro (só hash PBKDF2 em `EMPORIO_USUARIOS`); testes passam `usuarios=` para `criar_app`, nunca leem o .env.
 - SPEC-007 (atendimento humano): histórico em SQLite sempre mascarado; telefone do cliente só como hash e mascarado; com a conversa assumida, a Lia não responde.
+- SPEC-010 (nome do cliente): o nome do perfil do WhatsApp só passa por `emporio.rules.nome_cliente.primeiro_nome` (uma palavra de letras); perfil sem nome usável faz a Lia perguntar como chamar; sem informação de perfil (evals), o prompt é idêntico ao dos evals.
+- SPEC-011 (pedidos pelo número do WhatsApp): só o número do remetente entregue pelo canal identifica o cliente (`Agente.responder(telefone_remetente=...)`); telefone digitado nunca lista pedidos; a sessão guarda o `customer_id`, nunca o número; o nome do cadastro vence o do perfil (`Agente.identificar`).
+- SPEC-012 (LGPD): prazos em `emporio.rules.privacidade` (90 dias de retenção, 15 dias de resposta ao titular); toda linha nova de log JSONL leva `registrado_em` do relógio real; telefone só como HMAC (`chave_do_telefone`); `tickets.jsonl` não é expurgado.
+- SPEC-013 (segurança): todo POST do painel exige token CSRF (`tests/apoio.com_csrf` nos testes); scripts só com `nonce` e servidos de `static/vendor`, nunca de CDN; limites em `emporio.rules.limites`.
+- SPEC-014 (mídia): foto, áudio, vídeo e documento viram marcador (`emporio.rules.midia`); nunca leia, guarde ou mande o arquivo ao modelo; a resposta é fixa, sem LLM.
 - SPEC-006 (interface web): só mostra o que o `Agente` devolve; nenhuma regra de negócio em `emporio.web`, texto sempre escapado.
 - A janela de 24 h conta só da última mensagem do cliente (`emporio.retencao.janela`); nada é enviado por iniciativa da loja fora dela, e a retenção fica desligada por padrão.
 - Implemente em incrementos pequenos, cada um com testes passando, e cite a spec no commit: `feat: busca de produtos (spec 001)`.

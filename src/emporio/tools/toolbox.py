@@ -30,7 +30,10 @@ from emporio.rules.frete import frete
 from emporio.rules.horario import Calendario, Relogio, aberto_agora, proxima_abertura, relogio_real
 from emporio.rules.parcelamento import parcelamento_maximo
 from emporio.rules.precos import preco_final
-from emporio.rules.verificacao import mascarar_texto, verificar_dono
+from emporio.rules.limites import TENTATIVAS_VERIFICACAO
+from emporio.rules.nome_cliente import primeiro_nome
+from emporio.rules.privacidade import PRAZO_RESPOSTA_TITULAR_DIAS
+from emporio.rules.verificacao import cliente_do_telefone, mascarar_texto, verificar_dono
 from emporio.tools import schemas as S
 
 log = logging.getLogger(__name__)
@@ -72,6 +75,11 @@ class Sessao:
     atendimento_humano: bool = False            # solicitação de atendimento humano registrada (SPEC-002 RI-11)
     registro_proposto: dict | None = None       # resumo preparado e ainda não confirmado (§4.3 da spec)
     origem: str | None = None                   # canal de onde veio o lead (SPEC-005), detectado em código
+    nome_cliente: str | None = None             # primeiro nome do perfil do WhatsApp, já filtrado (SPEC-010)
+    perfil_sem_nome: bool = False               # o WhatsApp mandou o perfil, mas sem nome usável (SPEC-010)
+    cliente_canal: int | None = None            # customer_id do número do remetente; nunca o número (SPEC-011)
+    verificacoes_falhas: int = 0                # verificações de pedido que não conferiram (SPEC-013 RS-06)
+    nome_do_cadastro: bool = False              # nome_cliente veio do customers.csv, não do perfil (SPEC-011 RP-08)
 
 
 @dataclass(frozen=True)
@@ -96,7 +104,11 @@ class Toolbox:
             Tool("detalhar_produto", "Detalhes de um produto: preço, PIX, promoção, parcelamento máximo no cartão, "
                  "especificações e disponibilidade.", S.DetalharProdutoArgs, self.detalhar_produto),
             Tool("consultar_pedido", "Status, rastreio, previsão e itens de um pedido. Exige o número do pedido e o "
-                 "telefone ou e-mail do cadastro.", S.ConsultarPedidoArgs, self.consultar_pedido),
+                 "telefone ou e-mail do cadastro, a não ser que o pedido seja do cliente identificado pelo número "
+                 "do WhatsApp (veio de meus_pedidos).", S.ConsultarPedidoArgs, self.consultar_pedido),
+            Tool("meus_pedidos", "Pedidos do cliente identificado pelo número do WhatsApp desta conversa, do mais "
+                 "recente para o mais antigo. Use para 'minha última compra', 'meus pedidos'. Sem argumentos.",
+                 S.MeusPedidosArgs, self.meus_pedidos),
             Tool("verificar_arrependimento", "Decide se um pedido verificado pode ser devolvido por arrependimento "
                  "(compra online, até 7 dias do recebimento). Pergunte ao cliente a data de recebimento e o canal.",
                  S.VerificarArrependimentoArgs, self.verificar_arrependimento),
@@ -108,8 +120,9 @@ class Toolbox:
                  S.CalcularFreteArgs, self.calcular_frete),
             Tool("consultar_promocoes", "Promoções cadastradas: se uma campanha (ex.: Black Friday) está ativa, ou a "
                  "lista das promoções ativas com produto e preço.", S.ConsultarPromocoesArgs, self.consultar_promocoes),
-            Tool("registrar_solicitacao", "Registra (de forma simulada, protótipo) reclamação, devolução, troca ou "
-                 "pedido de atendimento humano, em dois passos: confirmado=false prepara o resumo para mostrar ao "
+            Tool("registrar_solicitacao", "Registra (de forma simulada, protótipo) reclamação, devolução, troca, "
+                 "pedido de atendimento humano ou pedido do cliente sobre os próprios dados (tipo privacidade: ver, "
+                 "corrigir, apagar), em dois passos: confirmado=false prepara o resumo para mostrar ao "
                  "cliente; confirmado=true grava, depois que ele aprovar.",
                  S.RegistrarSolicitacaoArgs, self.registrar_solicitacao),
         ]}
@@ -239,6 +252,9 @@ class Toolbox:
         pedido = self.catalogo.pedidos.get(pedido_id)
         if pedido is None:
             return None
+        if sessao.cliente_canal is not None and pedido.customer_id == sessao.cliente_canal:
+            sessao.pedido_verificado = pedido_id     # SPEC-011: do dono do número do WhatsApp
+            return pedido
         if verificacao:
             cliente = self.catalogo.clientes[pedido.customer_id]
             if verificar_dono(cliente, verificacao):
@@ -252,8 +268,16 @@ class Toolbox:
     def consultar_pedido(self, a: S.ConsultarPedidoArgs, sessao: Sessao) -> dict:
         if sessao.pedido_verificado not in (None, a.pedido_id):
             sessao.pedido_verificado = None          # outro pedido: a verificação anterior cai (RN-08)
+        do_canal = self.catalogo.pedidos.get(a.pedido_id)
+        do_canal = do_canal is not None and sessao.cliente_canal == do_canal.customer_id
+        if a.verificacao and not do_canal and sessao.verificacoes_falhas >= TENTATIVAS_VERIFICACAO:
+            return {"autorizado": False, "erro": "muitas_tentativas",          # SPEC-013 RS-06
+                    "mensagem": "Muitas tentativas de verificação nesta conversa. Não tente de novo: ofereça o "
+                                "contato da equipe (telefone, e-mail e horário) para o cliente confirmar o pedido."}
         pedido = self._pedido_autorizado(a.pedido_id, a.verificacao, sessao)
         if pedido is None:
+            if a.verificacao and not do_canal:
+                sessao.verificacoes_falhas += 1
             return {"autorizado": False, "mensagem": MSG_NAO_AUTORIZADO}
         cliente = self.catalogo.clientes[pedido.customer_id]
         itens = [{"produto": self.catalogo.produtos[i.product_id].name, "quantidade": i.quantity}
@@ -275,6 +299,40 @@ class Toolbox:
                      "entregue ou recebido nessa data"),
         }
 
+    def cliente_do_canal(self, telefone: str | None) -> int | None:
+        """customer_id do número do remetente (SPEC-011), ou None."""
+        cliente = cliente_do_telefone(self.catalogo.clientes.values(), telefone)
+        return cliente.customer_id if cliente else None
+
+    def primeiro_nome_do_cliente(self, customer_id: int | None) -> str | None:
+        """Primeiro nome do cadastro (customers.csv), para tratar o cliente identificado pelo canal."""
+        cliente = self.catalogo.clientes.get(customer_id) if customer_id is not None else None
+        return primeiro_nome(cliente.name) if cliente else None
+
+    def meus_pedidos(self, a: S.MeusPedidosArgs, sessao: Sessao) -> dict:
+        if sessao.cliente_canal is None:
+            return {"identificado": False, "mensagem": (
+                "O número deste WhatsApp não está no cadastro. Peça o número do pedido e o telefone ou e-mail "
+                "do cadastro para usar consultar_pedido.")}
+        cliente = self.catalogo.clientes[sessao.cliente_canal]
+        pedidos = sorted((p for p in self.catalogo.pedidos.values() if p.customer_id == cliente.customer_id),
+                         key=lambda p: (p.order_date, p.order_id), reverse=True)
+        return {
+            "identificado": True,
+            "cliente_primeiro_nome": cliente.name.split()[0],
+            "total_de_pedidos": len(pedidos),
+            "pedidos": [{
+                "pedido_id": p.order_id,
+                "data_pedido": _data(p.order_date),
+                "status": STATUS_PEDIDO[p.status],
+                "total_registrado": brl(p.total_brl),
+                "itens": [{"produto": self.catalogo.produtos[i.product_id].name, "quantidade": i.quantity}
+                          for i in self.catalogo.itens.get(p.order_id, [])],
+            } for p in pedidos[:5]],
+            "nota": ("o primeiro da lista é o mais recente. Para rastreio, previsão ou devolução, use "
+                     "consultar_pedido com o pedido_id, sem pedir telefone ou e-mail. Valores como registrados."),
+        }
+
     def verificar_arrependimento(self, a: S.VerificarArrependimentoArgs, sessao: Sessao) -> dict:
         if sessao.pedido_verificado != a.pedido_id:
             return {"autorizado": False, "mensagem": "Verifique o pedido com consultar_pedido antes."}
@@ -294,8 +352,10 @@ class Toolbox:
                                    for x in r.alternativas]
         out["orientacao"] = {
             "dentro_do_prazo": "Elegível. Explique as condições e ofereça registrar a solicitação.",
-            "fora_do_prazo": "Não elegível ao arrependimento. Apresente as alternativas; não trate como defeito.",
-            "compra_na_loja": "Arrependimento vale só para compra online. Apresente as alternativas.",
+            "fora_do_prazo": "Não elegível ao arrependimento. Apresente as alternativas; não trate como defeito. "
+                             "Ofereça também a revisão do caso pela equipe, se o cliente quiser (SPEC-012 RL-10).",
+            "compra_na_loja": "Arrependimento vale só para compra online. Apresente as alternativas. Ofereça também "
+                              "a revisão do caso pela equipe, se o cliente quiser (SPEC-012 RL-10).",
             "faltam_dados": "Pergunte a data em que recebeu e se a compra foi online; explique a regra de forma "
                             "condicional enquanto isso.",
             "pedido_nao_entregue": "O pedido ainda não foi entregue; informe o status e ofereça a equipe.",
@@ -367,15 +427,28 @@ class Toolbox:
         if a.pedido_id is not None and sessao.pedido_verificado != a.pedido_id:
             return {"gravado": False, "orientacao": "O pedido citado não foi verificado nesta conversa."}
         if not a.confirmado:
+            if not a.resumo:
+                return {"gravado": False, "erro": "resumo_obrigatorio",
+                        "orientacao": "Com confirmado=false, escreva o resumo que o cliente vai aprovar."}
             sessao.registro_proposto = {"tipo": a.tipo, "resumo": a.resumo, "pedido_id": a.pedido_id,
                                         "turno": sessao.turno}
-            return {"gravado": False, "resumo_para_confirmar": a.resumo, "tipo": a.tipo,
-                    "orientacao": "Mostre este resumo ao cliente e pergunte se pode registrar. Só chame com "
-                                  "confirmado=true depois que ele responder que sim."}
+            out = {"gravado": False, "resumo_para_confirmar": a.resumo, "tipo": a.tipo,
+                   "orientacao": "Mostre este resumo ao cliente e pergunte se pode registrar. Só chame com "
+                                 "confirmado=true depois que ele responder que sim."}
+            if a.tipo == "privacidade":                   # SPEC-012 RL-04
+                out["prazo_resposta"] = f"até {PRAZO_RESPOSTA_TITULAR_DIAS} dias"
+            return out
         proposta = sessao.registro_proposto
         if proposta is None or proposta["turno"] >= sessao.turno or proposta["tipo"] != a.tipo:
             return {"gravado": False, "orientacao": "Antes de gravar, chame com confirmado=false, mostre o resumo e "
                                                     "espere o cliente confirmar numa nova mensagem."}
+        mudou_resumo = a.resumo is not None and " ".join(a.resumo.split()) != " ".join(proposta["resumo"].split())
+        mudou_pedido = a.pedido_id is not None and a.pedido_id != proposta["pedido_id"]
+        if mudou_resumo or mudou_pedido:
+            return {"gravado": False, "erro": "proposta_alterada",
+                    "orientacao": "O resumo ou o pedido mudou depois que o cliente aprovou. Mostre o novo resumo "
+                                  "(confirmado=false) e peça a confirmação de novo; para gravar o que ele aprovou, "
+                                  "chame com confirmado=true sem resumo."}
         sessao.registro_proposto = None
         if a.tipo == "atendimento_humano":
             sessao.atendimento_humano = True
@@ -384,12 +457,18 @@ class Toolbox:
         if self.tickets_path.exists():
             existentes = sum(1 for _ in self.tickets_path.open(encoding="utf-8"))
         protocolo = f"SIM-{agora:%Y%m%d}-{existentes + 1:04d}"
-        registro = {"protocolo": protocolo, "criado_em": agora.isoformat(), "tipo": a.tipo,
-                    "pedido_id": a.pedido_id, "resumo": mascarar_texto(a.resumo), "origem": sessao.origem, "simulado": True}
+        registro = {"protocolo": protocolo, "criado_em": agora.isoformat(), "tipo": a.tipo,   # grava o aprovado
+                    "pedido_id": proposta["pedido_id"], "resumo": mascarar_texto(proposta["resumo"]),
+                    "origem": sessao.origem, "simulado": True}
         self.tickets_path.parent.mkdir(parents=True, exist_ok=True)
         with self.tickets_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(registro, ensure_ascii=False) + "\n")
         sessao.registros.append(protocolo)
+        if a.tipo == "privacidade":                       # SPEC-012 RL-04: prazo do art. 19, II, da LGPD
+            return {"gravado": True, "protocolo_simulado": protocolo,
+                    "texto_para_cliente": (f"Registrei seu pedido sobre seus dados pessoais (protótipo), protocolo "
+                                           f"{protocolo}. A equipe responde em até {PRAZO_RESPOSTA_TITULAR_DIAS} dias."),
+                    "orientacao": "Informe o protocolo e o prazo de resposta; não prometa que os dados já foram apagados."}
         return {"gravado": True, "protocolo_simulado": protocolo,
                 "texto_para_cliente": f"Registrei sua solicitação (protótipo), protocolo {protocolo}.",
                 "orientacao": "Não prometa prazo de retorno; informe os canais da loja (telefone, e-mail, horário)."}

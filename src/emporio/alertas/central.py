@@ -18,6 +18,7 @@ from typing import Callable
 
 from emporio.alertas.deteccao import pediu_vendedor
 from emporio.alertas.som import Tocador
+from emporio.rules.horario import relogio_real
 from emporio.rules.origem import POR_CHAVE
 from emporio.rules.verificacao import mascarar_texto
 
@@ -45,6 +46,8 @@ class Alerta:
     def aviso(self) -> str:
         if self.tipo == "pedido_vendedor":
             texto = "🙋 Cliente pediu um vendedor: quer falar agora."
+        elif self.tipo == "midia":                                  # SPEC-014
+            texto = f"📎 {self.motivo[0].upper()}{self.motivo[1:]}: a Lia não abre arquivos, veja com o cliente."
         else:
             texto = (f"📋 Nova solicitação encaminhada à equipe: {self.motivo}"
                      + (f" ({self.protocolo})" if self.protocolo else "") + ".")
@@ -121,8 +124,9 @@ class CentralAlertas:
             with self._trava:
                 self.fila.parent.mkdir(parents=True, exist_ok=True)
                 with self.fila.open("a", encoding="utf-8") as f:
+                    registrado_em = relogio_real().isoformat(timespec="seconds")   # SPEC-012 RL-01 (relógio real)
                     for a in alertas:
-                        f.write(json.dumps(asdict(a), ensure_ascii=False) + "\n")
+                        f.write(json.dumps({**asdict(a), "registrado_em": registrado_em}, ensure_ascii=False) + "\n")
         except OSError as e:
             if self.avisar:
                 self.avisar(Alerta("encaminhamento", f"falha ao gravar a fila do vendedor ({type(e).__name__})",

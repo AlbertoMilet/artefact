@@ -15,7 +15,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
   // Som sintetizado no navegador para alerta novo (mesmos padrões do vigia do terminal, SPEC-003).
   (() => {
     let audio = null, vistos = null;

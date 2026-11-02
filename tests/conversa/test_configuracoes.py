@@ -16,6 +16,7 @@ from emporio.web import criar_app
 from emporio.web.auth import hash_senha
 from emporio.web.repositorio import Repositorio
 from emporio.whatsapp import conexao as arq
+from tests.apoio import com_csrf
 
 USUARIOS = {"carlos": hash_senha("senha-forte-1", iteracoes=1000)}
 
@@ -26,7 +27,7 @@ def painel(tmp_path):
     app = criar_app(montar_agente(config), config, Repositorio(tmp_path / "a.db"), usuarios=USUARIOS)
     c = TestClient(app)
     c.post("/login", data={"usuario": "carlos", "senha": "senha-forte-1"})
-    return c
+    return com_csrf(c)
 
 
 # ---------------------------------------------------------------- persona no prompt

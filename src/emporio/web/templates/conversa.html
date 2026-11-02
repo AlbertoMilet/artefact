@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
   <a href="/atendimento" class="small">&larr; Conversas</a>
-  <h1 class="h4 mb-0">{{ conv.telefone }}</h1>
+  <h1 class="h4 mb-0">{% if conv.nome %}{{ conv.nome }} · {% endif %}{{ conv.telefone }}</h1>
   {% if conv.status == "vendedor" %}<span class="badge status-vendedor">com vendedor</span>{% else %}<span class="badge status-lia">com {{ artigo }} {{ assistente }}</span>{% endif %}
   {% if conv.aguardando_vendedor %}<span class="badge text-bg-warning">pediu vendedor</span>{% endif %}
   {% if conv.origem %}<span class="badge canal">{{ conv.origem|origem }}</span>{% endif %}
@@ -36,12 +36,23 @@
     <h2 class="h6">Dados da conversa</h2>
     <ul class="list-unstyled small">
       <li>Cliente: {{ conv.telefone }}</li>
+      <li>Nome no perfil: {{ conv.nome or "não informado" }}</li>
       <li>Origem do lead: {{ conv.origem|origem or "desconhecida" }}</li>
       <li>Pedido verificado: {{ pedido if pedido else "nenhum nesta sessão" }}</li>
       <li>Solicitações registradas: {{ protocolos|join(", ") if protocolos else "nenhuma" }}</li>
       <li>Início: {{ conv.criada_em[8:10] }}/{{ conv.criada_em[5:7] }} {{ conv.criada_em[11:16] }}</li>
     </ul>
     <p class="small text-body-secondary">Ao devolver, o agente recebe o que o vendedor escreveu como contexto da conversa.</p>
+    <h2 class="h6 mt-4">Dados pessoais (LGPD)</h2>
+    <p class="small text-body-secondary mb-2">Para atender um pedido do cliente de acesso ou exclusão. As ações ficam registradas na auditoria.</p>
+    <a class="btn btn-sm btn-outline-secondary mb-2" href="/atendimento/{{ conv.id }}/exportar">Exportar dados (JSON)</a>
+    <form method="post" action="/atendimento/{{ conv.id }}/apagar" class="small">
+      <div class="form-check mb-1">
+        <input class="form-check-input" type="checkbox" name="confirmar" value="sim" id="confirmar-apagar" required>
+        <label class="form-check-label" for="confirmar-apagar">Confirmo: apagar esta conversa do histórico e dos logs</label>
+      </div>
+      <button class="btn btn-sm btn-outline-danger">Apagar dados do cliente</button>
+    </form>
   </div>
 </div>
 {% endblock %}

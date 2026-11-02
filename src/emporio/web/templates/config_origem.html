@@ -35,7 +35,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ nonce }}">
   document.querySelectorAll("[data-copiar]").forEach((b) => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.copiar); b.textContent = "Copiado"; } catch { b.textContent = "Copie à mão"; }
   }));

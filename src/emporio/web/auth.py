@@ -76,24 +76,55 @@ def segredo_da_sessao() -> tuple[bytes, bool]:
 
 @dataclass
 class Sessoes:
+    """Cookie `usuario.expira.id.impressao.assinatura` (SPEC-013 RS-04).
+
+    - `id`: aleatório por login; "Sair" o põe na lista de revogadas (`revogada`).
+    - `impressao`: HMAC do hash da senha atual; trocar a senha derruba as sessões (`hash_de`).
+    - `csrf(token)`: token CSRF da sessão, HMAC do id (RS-03)."""
     segredo: bytes
     duracao_s: int = DURACAO_SESSAO_S
     relogio: callable = time.time
+    hash_de: callable = None        # usuario -> hash guardado (ou None, se o usuário não existe mais)
+    revogada: callable = None       # id da sessão -> bool
 
-    def emitir(self, usuario: str) -> str:
+    def emitir(self, usuario: str, guardado: str = "") -> str:
         expira = int(self.relogio()) + self.duracao_s
-        corpo = f"{_b64(usuario.encode())}.{expira}"
+        corpo = f"{_b64(usuario.encode())}.{expira}.{secrets.token_urlsafe(12)}.{self._impressao(guardado)}"
         return f"{corpo}.{self._assinar(corpo)}"
 
-    def validar(self, token: str | None) -> str | None:
+    def _partes(self, token: str | None) -> tuple[str, int, str, str] | None:
         try:
-            usuario_b64, expira, assinatura = (token or "").split(".")
-            corpo = f"{usuario_b64}.{expira}"
+            usuario_b64, expira, sid, impressao, assinatura = (token or "").split(".")
+            corpo = f"{usuario_b64}.{expira}.{sid}.{impressao}"
             if not hmac.compare_digest(assinatura, self._assinar(corpo)) or int(expira) < self.relogio():
                 return None
-            return _de_b64(usuario_b64).decode()
-        except (ValueError, TypeError):
+            return _de_b64(usuario_b64).decode(), int(expira), sid, impressao
+        except (ValueError, TypeError, UnicodeDecodeError):
             return None
+
+    def validar(self, token: str | None) -> str | None:
+        partes = self._partes(token)
+        if partes is None:
+            return None
+        usuario, _, sid, impressao = partes
+        if self.revogada is not None and self.revogada(sid):
+            return None
+        if self.hash_de is not None:
+            guardado = self.hash_de(usuario)
+            if guardado is None or not hmac.compare_digest(impressao, self._impressao(guardado)):
+                return None
+        return usuario
+
+    def id_e_expiracao(self, token: str | None) -> tuple[str, int] | None:
+        partes = self._partes(token)
+        return (partes[2], partes[1]) if partes else None
+
+    def csrf(self, token: str | None) -> str | None:
+        partes = self._partes(token)
+        return _b64(hmac.new(self.segredo, f"csrf.{partes[2]}".encode(), hashlib.sha256).digest()) if partes else None
+
+    def _impressao(self, guardado: str) -> str:
+        return _b64(hmac.new(self.segredo, f"senha.{guardado}".encode(), hashlib.sha256).digest()[:9])
 
     def _assinar(self, corpo: str) -> str:
         return _b64(hmac.new(self.segredo, corpo.encode(), hashlib.sha256).digest())

@@ -11,6 +11,16 @@
              aria-label="Mensagem" autofocus autocomplete="off" required>
       <button class="btn btn-success">Enviar</button>
     </form>
+    {# SPEC-014: simula o envio de mídia; só o marcador chega ao agente, nenhum arquivo #}
+    <div class="d-flex flex-wrap gap-1 mt-1" aria-label="Enviar mídia">
+      {% for tipo, rotulo in (("foto", "📷 Foto"), ("audio", "🎤 Áudio"), ("video", "🎬 Vídeo"), ("documento", "📄 Documento")) %}
+      <form hx-post="/simulador/midia" hx-target="#painel" hx-swap="outerHTML" hx-indicator="#digitando"
+            method="post" action="/simulador/midia">
+        <input type="hidden" name="tipo" value="{{ tipo }}">
+        <button class="btn btn-sm btn-outline-secondary">{{ rotulo }}</button>
+      </form>
+      {% endfor %}
+    </div>
     <div id="digitando" class="digitando small text-body-secondary mt-1">
       <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> {{ assistente }} está digitando…
     </div>
