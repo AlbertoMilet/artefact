@@ -30,6 +30,11 @@
     t.appendChild(linha);
     t.scrollTop = t.scrollHeight;
   });
-  document.body.addEventListener("htmx:afterSettle", () => document.querySelector("#painel [name=texto][type=text]")?.focus());
+  // Depois de enviar, o cursor volta à mensagem. A atualização periódica do histórico (GET a cada 2 s) não
+  // mexe no foco: senão o cursor saía do campo do telefone ou do nome no meio da digitação.
+  document.body.addEventListener("htmx:afterSettle", (e) => {
+    if (e.detail.requestConfig?.verb !== "post") return;
+    document.querySelector("#painel [name=texto][type=text]")?.focus();
+  });
 </script>
 {% endblock %}
