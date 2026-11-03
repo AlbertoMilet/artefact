@@ -87,7 +87,7 @@ O histórico fica em SQLite (`logs/atendimento.db`, fora do git), mascarado.
 
 | Comando | O que faz |
 |---|---|
-| `uv run python -m evals.rodar --repeticoes 3` | 43 cenários com o modelo real; relatório em `docs/avaliacao.md` (~2 min, ≈ US$ 0,05 com o DeepSeek) |
+| `uv run python -m evals.rodar --repeticoes 3` | 43 cenários com o modelo real; relatório em `docs/avaliacao.md` (~2 min, ≈ US$ 0,08 com o DeepSeek) |
 | `uv run python -m evals.rodar --modelo haiku --repeticoes 3 --saida docs/avaliacao-haiku.md` | avalia outro modelo sem sobrescrever o relatório principal (≈ US$ 0,19 com o Haiku) |
 | `uv run pytest -m llm` | os evals como teste (critérios CA-16 a CA-18 da spec) |
 | `uv run python scripts/perfil_dados.py` | confirma os 19 achados nos dados (`docs/data_quality.md`) |
@@ -161,13 +161,13 @@ A escolha saiu de uma [comparação antes de codar](docs/fase0-modelos.md) e foi
 
 | Modelo | Evals | Latência | Custo por rodada de 43 casos | Observação |
 |---|---|---|---|---|
-| **`deepseek/deepseek-v4.1-flash`** (padrão) | **129/129** (3 rep.) | 3,6 s | ≈ US$ 0,016 | melhor resultado, o mais rápido e o mais barato; aceita `temperature` |
+| **`deepseek/deepseek-v4.1-flash`** (padrão) | **129/129** (3 rep.) | 3,2 s | ≈ US$ 0,025 | melhor resultado, o mais rápido e o mais barato; aceita `temperature` |
 | `anthropic/claude-haiku-5.5` | 123/129 (3 rep.), 1 falha crítica | 5,0 s | ≈ US$ 0,063 | respondeu contatos da loja direto do prompt, sem tool; repetiu o nome completo que o cliente digitou |
 | `openai/gpt-6.1-sol` | 41/42 (1 rep., versão anterior) | 5,2 s | US$ 0,109 | recusou, em inglês, um pedido comum ("Quero um violão Takamine…") |
 
-**Testei trocar o padrão para o Haiku (D-15) e mantive o DeepSeek.** Os evals refeitos com o Haiku deram resultado pior, com mais latência e cerca de 3,9× o custo. O tom não foi medido por rubrica, então não havia evidência que compensasse a regressão. Algumas falhas do Haiku são do verificador, não do modelo, e estão explicadas em [Avaliação](#avaliação).
+**Testei trocar o padrão para o Haiku (D-15) e mantive o DeepSeek.** Os evals refeitos com o Haiku deram resultado pior, com mais latência e cerca de 2,5× o custo. O tom não foi medido por rubrica, então não havia evidência que compensasse a regressão. Algumas falhas do Haiku são do verificador, não do modelo, e estão explicadas em [Avaliação](#avaliação).
 
-As rodadas do DeepSeek e do Haiku são do código atual; a do GPT-6.1 Sol é de uma versão anterior (42 cenários, 9 tools). Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md).
+A rodada do DeepSeek é do commit `c5ba40c`; a do Haiku, do commit `295305d` com o padrão trocado para ele; a do GPT-6.1 Sol é de uma versão anterior (42 cenários, 9 tools). Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md).
 
 - **Achado que mudou o código:** com `require_parameters`, enviar um parâmetro que nenhum endpoint ZDR suporta derruba a chamada com 404. O Haiku não aceita `temperature`, por exemplo. Por isso o cliente consulta a lista pública de endpoints ZDR ao iniciar e só envia o que o modelo aceita.
 - **Raciocínio estendido não desligado** (decisão D-13): o cliente não envia `reasoning.enabled=false` ao agente principal e deixa o padrão do endpoint (o DeepSeek raciocina por padrão); só a retenção desliga explicitamente. Com isso, 126/126; sem ele, 116/126, embora cerca de 0,5 s mais rápido por conversa (rodada comparativa da D-13, na versão com 9 tools). Sem raciocínio, o modelo não inventou nada, mas pedia mais dados em vez de consultar a política.
