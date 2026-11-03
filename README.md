@@ -11,23 +11,21 @@ Trecho resumido de uma conversa ([completa aqui](examples/conversas/02-takamine-
 
 ```text
 Cliente: Quanto custa o Takamine GD20?
-Lia:     O Takamine GD20 Dreadnought Natural está disponível (5 unidades em estoque):
+Lia:     O Takamine GD20 Dreadnought Natural está disponível:
          - Preço: R$ 2.199,00
-         - No PIX: R$ 2.089,05
+         - No PIX: R$ 2.089,05 (economia de R$ 109,95)
+         - Estoque: 5 unidades
 ```
 
-**A solução:**
-- function calling com 10 tools tipadas;
-- regras de negócio em funções Python puras e testadas: o LLM só redige, não faz contas nem decide elegibilidade;
-- manual consultado por BM25 por seção;
-- `deepseek/deepseek-v4.1-flash` via OpenRouter, sempre com Zero Data Retention (ZDR);
-- interface web no estilo de painel (FastAPI, Jinja2, Bootstrap e HTMX), com o chat no terminal para automação.
+## A solução em 1 minuto
 
-**Como foi verificada:**
-- 427 testes automatizados, sem rede e sem chave;
-- 43 cenários com o modelo real, 3 repetições cada, rodados no código atual: as 129 execuções passaram, sem falha crítica ([relatório](docs/avaliacao.md)). Falhas intermitentes de rodadas anteriores estão explicadas em [Avaliação](#avaliação). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não avaliam nuance de tom.
+**O agente é simples de propósito:** um único LLM com function calling e 10 tools tipadas, sem framework. As contas e as decisões ficam em funções Python puras e testadas: preço final, PIX, parcelas, frete, prazo de devolução e quem pode ver um pedido. O LLM só escolhe a tool e redige a resposta. O manual de políticas é consultado por BM25, seção por seção. Os CSVs são validados e ficam em memória.
 
-**Além do pedido:** oito protótipos do que um atendimento por WhatsApp precisaria em produção. Retenção, alerta ao vendedor, conexão com a Meta, origem do lead, nome e pedidos pelo WhatsApp, LGPD e segurança do painel estão [numa seção própria](#funcionalidades-extras), com o que vem ligado por padrão; o prompt avaliado nos evals não muda.
+- **Modelo:** `deepseek/deepseek-v4.1-flash` via OpenRouter, sempre com Zero Data Retention (ZDR). Foi escolhido por comparação ([D-10, D-15](docs/decisoes.md)). O Claude Haiku 5.5 e o GPT-6.1 Sol ficam como opções que o próprio sistema troca, sem reiniciar.
+- **Verificação:** 427 testes sem rede e sem chave. Mais 43 cenários com o modelo real, 3 repetições cada: as 129 execuções passaram, sem falha crítica ([relatório](docs/avaliacao.md)). Os verificadores são por regra: pegam valor inventado, vazamento de dados e promessas indevidas, mas não provam correção factual completa (veja [Limitações](#limitações-e-próximos-passos)).
+- **Interface:** chat no terminal, o caminho mais curto para avaliar. Há também um painel web (FastAPI, Jinja2, Bootstrap e HTMX) com visual desenhado no **Claude Design**.
+
+**Além do pedido, e opcional:** depois do agente pronto e avaliado, fiz protótipos do que um atendimento por WhatsApp precisaria: retenção, alerta ao vendedor, conexão com a Meta, origem do lead, LGPD, login e segurança do painel. Estão descritos à parte, em [docs/extras.md](docs/extras.md). A retenção vem desligada, e o prompt avaliado nos evals é o mesmo com ou sem eles. Um protótipo do painel está hospedado numa VPS (Easypanel); veja o [guia de deploy](docs/deploy-easypanel.md).
 
 | O enunciado pede | Seção |
 |---|---|
@@ -47,52 +45,50 @@ Todos os comandos rodam na raiz do repositório. Os requisitos são Python 3.12+
 
 O `uv run` usa o ambiente do projeto, então não é preciso ativá-lo.
 
+### Caminho mais curto: chat no terminal com o modelo real
+
 ```bash
 uv sync                                    # instala as dependências travadas (uv.lock)
-uv run python -m emporio ui --fake         # abre a interface no navegador, SEM chave e SEM modelo de linguagem
-uv run pytest                              # 427 testes, sem rede e sem chave (~25 s)
-```
+cp .env.example .env                       # Windows (PowerShell ou cmd): copy .env.example .env
+# no .env: OPENROUTER_API_KEY=sk-or-...      (chave em https://openrouter.ai/settings/keys)
+# no .env: DATA_REFERENCIA=2026-03-25T10:00  (recomendado: a data usada nos exemplos e evals)
 
-A interface ([SPEC-006](docs/specs/SPEC-006-interface-web.md) e [SPEC-007](docs/specs/SPEC-007-atendimento-humano.md)) abre em `http://127.0.0.1:8000`, com três abas:
-- **Simulador de WhatsApp:** você é o cliente. O telefone e o "Nome no perfil" fazem o papel do que o WhatsApp manda com cada mensagem ([extras](#funcionalidades-extras)); com (67) 98432-1098, um cliente do cadastro, experimente "qual foi minha última compra?". Tem um roteiro de perguntas com um clique, e cada resposta da Lia mostra as tools usadas (argumentos, resultado, tempo e custo).
-- **Atendimento:** o painel da loja. Lista as conversas e os alertas e abre o histórico de cada conversa. O vendedor pode assumir a conversa (a Lia pausa), responder e devolver à Lia.
-- **Configurações** ([SPEC-009](docs/specs/SPEC-009-configuracoes-no-painel.md)): modelo de linguagem (os 3 com ZDR), raciocínio e data de referência; persona do agente (nome, tom, emojis e instruções da loja, sem tocar nas regras invioláveis); conexão do WhatsApp passo a passo; links de origem dos leads; regras da retenção. Vale na próxima mensagem, sem reiniciar.
-
-O histórico fica em SQLite (`logs/atendimento.db`, fora do git), mascarado e com prazo de guarda ([LGPD](docs/privacidade.md)).
-
-**Login** ([SPEC-008](docs/specs/SPEC-008-login-do-painel.md)): no modo demonstração sem usuários configurados, entre com `demo` / `demo1234`; esse modo usa um banco próprio (`logs/demo.db`) e só sobe neste computador. Para usuários de verdade, rode `uv run python -m emporio usuario criar seu_nome`, que pede a senha e imprime a linha para `EMPORIO_USUARIOS` no `.env` (só o hash da senha vai para o arquivo). Gere também `EMPORIO_SEGREDO_SESSAO` com `uv run python -m emporio usuario segredo`. Fora de `127.0.0.1`, exige `--https-proxy` ([SPEC-013](docs/specs/SPEC-013-seguranca-do-painel.md)).
-
-O modo `--fake` é um roteador por palavras-chave que chama as **tools reais** e formata o resultado. Serve para ver as regras funcionando sem chave, e toda resposta avisa que não há modelo. A qualidade da conversa só aparece com o modelo real; veja os [exemplos](#exemplos-de-conversa).
-
-### Com o modelo real
-
-```bash
-cp .env.example .env                       # Windows: copy .env.example .env
-# no .env: OPENROUTER_API_KEY=sk-or-...   (chave em https://openrouter.ai/settings/keys)
-# opcional: DATA_REFERENCIA=2026-03-25T10:00, a data usada nos exemplos e evals
-
-uv run python -m emporio                   # a interface web (o mesmo que `ui`)
-uv run python -m emporio chat --debug      # alternativa no terminal, com o rastro das tools
-uv run python -m emporio chat --nome "Ana Paula"   # simula o nome do perfil do WhatsApp (SPEC-010)
-uv run python -m emporio chat --telefone "(67) 98432-1098"   # simula o número do remetente (SPEC-011)
+uv run python -m emporio chat --debug      # conversa com a Lia; --debug mostra as tools chamadas
+uv run pytest                              # 427 testes, sem rede e sem chave (~30 s)
 ```
 
 Os pedidos dos dados vão de out/2025 a mar/2026. Sem `DATA_REFERENCIA`, o relógio real faz pedidos de março parecerem pendentes há meses.
 
-**Trocar o modelo:** `uv run python -m emporio configurar --modelo haiku`. As opções são `deepseek` (padrão), `haiku` e `gpt-sol`; também dá para usar `OPENROUTER_MODEL` no `.env`, mas a escolha salva pelo `configurar` tem prioridade sobre ele. O configurador confere na lista pública do OpenRouter se o modelo tem endpoint ZDR com suporte a tools. As escolhas ficam em `.emporio.json`, fora do git; evals e exemplos as ignoram, para serem reproduzíveis.
+**Sem chave:** `uv run python -m emporio chat --fake` usa um roteador por palavras-chave que chama as **tools reais** e formata o resultado. Serve para ver as regras funcionando, e toda resposta avisa que não há modelo. A qualidade da conversa só aparece com o modelo real; veja os [exemplos](#exemplos-de-conversa).
 
-**Outras variáveis:** `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`), `EMPORIO_DATA_DIR` e `LLM_PROVIDER` (`openrouter` ou `fake`). As principais estão em `.env.example`.
+### Painel web (opcional)
 
-### Deploy (Easypanel)
+```bash
+uv run python -m emporio ui --fake         # sem chave: entre com demo / demo1234
 
-O `Dockerfile` da raiz sobe o painel atrás do HTTPS do Easypanel, com os dados num volume `/data`. Passo a passo, variáveis e limitações em [docs/deploy-easypanel.md](docs/deploy-easypanel.md).
+# com o modelo real, crie antes um usuário (o login demo só existe no modo --fake):
+uv run python -m emporio usuario criar admin   # pede a senha e imprime EMPORIO_USUARIOS=...; cole no .env
+uv run python -m emporio usuario segredo       # imprime EMPORIO_SEGREDO_SESSAO=...; cole no .env
+uv run python -m emporio ui                    # http://127.0.0.1:8000
+```
+
+O painel tem três abas:
+- **Simulador de WhatsApp:** você é o cliente, e cada resposta mostra as tools usadas (argumentos, resultado, tempo e custo).
+- **Atendimento:** o lado da loja. O vendedor pode assumir a conversa, e aí a Lia pausa.
+- **Configurações:** modelo, persona e data de referência.
+
+O histórico fica em SQLite (`logs/atendimento.db`, fora do git), mascarado.
+
+**Trocar o modelo: o próprio sistema faz isso.** No painel, em **Configurações → Modelo**, escolha entre `deepseek` (padrão), `haiku` e `gpt-sol`, ou informe outro slug do OpenRouter. A troca vale na próxima mensagem, sem reiniciar. Antes de aceitar, o sistema confere na lista pública do OpenRouter se o modelo tem endpoint ZDR com suporte a tools. No terminal, o equivalente é `uv run python -m emporio configurar --modelo haiku`, ou `/modelo` no meio do chat. As escolhas ficam em `.emporio.json`, fora do git, e têm prioridade sobre `OPENROUTER_MODEL`; evals e exemplos as ignoram, para serem reproduzíveis.
+
+**Outras variáveis:** `MAX_TOOL_CALLS` (5), `TURN_TIMEOUT_S` (30), `HISTORY_WINDOW` (10), `LLM_RACIOCINIO` (`true`), `EMPORIO_DATA_DIR` e `LLM_PROVIDER` (`openrouter` ou `fake`). As principais estão em `.env.example`. A imagem Docker e o deploy na VPS estão em [docs/deploy-easypanel.md](docs/deploy-easypanel.md).
 
 ### Avaliação e scripts
 
 | Comando | O que faz |
 |---|---|
-| `uv run python -m evals.rodar --repeticoes 3` | 43 cenários com o modelo real; relatório em `docs/avaliacao.md` (~2 min, ≈ US$ 0,05) |
-| `uv run python -m evals.rodar --modelo haiku --saida docs/avaliacao-haiku.md` | avalia outro modelo sem sobrescrever o relatório principal |
+| `uv run python -m evals.rodar --repeticoes 3` | 43 cenários com o modelo real; relatório em `docs/avaliacao.md` (~2 min, ≈ US$ 0,05 com o DeepSeek) |
+| `uv run python -m evals.rodar --modelo haiku --repeticoes 3 --saida docs/avaliacao-haiku.md` | avalia outro modelo sem sobrescrever o relatório principal (≈ US$ 0,19 com o Haiku) |
 | `uv run pytest -m llm` | os evals como teste (critérios CA-16 a CA-18 da spec) |
 | `uv run python scripts/perfil_dados.py` | confirma os 19 achados nos dados (`docs/data_quality.md`) |
 | `uv run python scripts/comparar_modelos.py` | compara modelos com ZDR (`docs/fase0-modelos.md`) |
@@ -161,18 +157,20 @@ Cada regra é uma função pura, com testes de valores escritos à mão.
 
 O agente envia ao modelo dados de pedidos de clientes. Por isso toda requisição leva `provider = {"zdr": true, "require_parameters": true, "data_collection": "deny"}`, e nunca há nova tentativa sem ZDR. Se não houver endpoint ZDR disponível, o turno vira resposta segura.
 
-A escolha saiu de uma [comparação antes de codar](docs/fase0-modelos.md) e foi confirmada nos evals completos:
+A escolha saiu de uma [comparação antes de codar](docs/fase0-modelos.md) e foi confirmada nos evals completos. O modelo não fica fixo no código: o sistema troca em Configurações, sem reiniciar.
 
-| Modelo | Evals | Latência | Custo de uma rodada | Observação |
+| Modelo | Evals | Latência | Custo por rodada de 43 casos | Observação |
 |---|---|---|---|---|
-| **`deepseek/deepseek-v4.1-flash`** | **129/129** (43 cenários, 3 rep.) | 3,6 s | ≈ US$ 0,016 | melhor tom para a §7.1; aceita `temperature` |
-| `anthropic/claude-haiku-5.5` | 41/42 (1 rep.) | 5,3 s | US$ 0,054 | respondeu o telefone da loja sem chamar a tool |
-| `openai/gpt-6.1-sol` | 41/42 (1 rep.) | 5,2 s | US$ 0,109 | recusou, em inglês, um pedido comum ("Quero um violão Takamine…") |
+| **`deepseek/deepseek-v4.1-flash`** (padrão) | **129/129** (3 rep.) | 3,6 s | ≈ US$ 0,016 | melhor resultado, o mais rápido e o mais barato; aceita `temperature` |
+| `anthropic/claude-haiku-5.5` | 123/129 (3 rep.), 1 falha crítica | 5,0 s | ≈ US$ 0,063 | respondeu contatos da loja direto do prompt, sem tool; repetiu o nome completo que o cliente digitou |
+| `openai/gpt-6.1-sol` | 41/42 (1 rep., versão anterior) | 5,2 s | US$ 0,109 | recusou, em inglês, um pedido comum ("Quero um violão Takamine…") |
 
-Nenhum dos três teve falha crítica. As rodadas do Haiku e do GPT-6.1 Sol são de uma versão anterior (42 cenários, 9 tools, antes das SPEC-010 a 013); a do DeepSeek é do código atual. Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md).
+**Testei trocar o padrão para o Haiku (D-15) e mantive o DeepSeek.** Os evals refeitos com o Haiku deram resultado pior, com mais latência e cerca de 3,9× o custo. O tom não foi medido por rubrica, então não havia evidência que compensasse a regressão. Algumas falhas do Haiku são do verificador, não do modelo, e estão explicadas em [Avaliação](#avaliação).
+
+As rodadas do DeepSeek e do Haiku são do código atual; a do GPT-6.1 Sol é de uma versão anterior (42 cenários, 9 tools). Relatórios: [deepseek](docs/avaliacao.md), [haiku](docs/avaliacao-haiku.md), [gpt-sol](docs/avaliacao-gpt-sol.md).
 
 - **Achado que mudou o código:** com `require_parameters`, enviar um parâmetro que nenhum endpoint ZDR suporta derruba a chamada com 404. O Haiku não aceita `temperature`, por exemplo. Por isso o cliente consulta a lista pública de endpoints ZDR ao iniciar e só envia o que o modelo aceita.
-- **Raciocínio estendido ligado** (decisão D-13): com ele, 126/126; sem ele, 116/126, embora cerca de 0,5 s mais rápido por conversa (rodada comparativa da D-13, na versão com 9 tools). Sem raciocínio, o modelo não inventou nada, mas pedia mais dados em vez de consultar a política.
+- **Raciocínio estendido não desligado** (decisão D-13): o cliente não envia `reasoning.enabled=false` ao agente principal e deixa o padrão do endpoint (o DeepSeek raciocina por padrão); só a retenção desliga explicitamente. Com isso, 126/126; sem ele, 116/126, embora cerca de 0,5 s mais rápido por conversa (rodada comparativa da D-13, na versão com 9 tools). Sem raciocínio, o modelo não inventou nada, mas pedia mais dados em vez de consultar a política.
 
 ### Retrieval: BM25 por seção, sem banco vetorial
 
@@ -209,6 +207,7 @@ Cada um virou mudança no prompt ou na tool, com teste.
 ### Interface e persistência
 
 - **Interface web (FastAPI, Jinja2, Bootstrap e HTMX):** o enunciado pede uma forma de conversar com o agente, e um painel deixa ver ao mesmo tempo a conversa, o rastro das tools e o lado da loja (assumir a conversa, alertas, configurações). HTMX evita um front-end separado: o servidor devolve HTML pronto, e todo texto é escapado. Bootstrap e HTMX são servidos pelo próprio app, sem CDN. O chat no terminal (`python -m emporio chat`) fica para automação, evals e `--debug`.
+- **Visual do site com o Claude Design:** o layout, as cores e os componentes do painel e do Simulador de WhatsApp foram desenhados no **Claude Design** e depois implementados nos templates Jinja2 com Bootstrap. Preços, verificação e políticas ficam fora da camada web (SPEC-006); a web só coordena o atendimento (limite de mensagens, pausa da Lia quando o vendedor assume).
 - **Histórico em SQLite** (`logs/atendimento.db`): um arquivo local, sem servidor de banco, suficiente para um protótipo de uma loja. Texto gravado já mascarado e telefone só como HMAC; retenção e expurgo em [docs/privacidade.md](docs/privacidade.md). Num canal real, o próximo passo é um banco compartilhado.
 
 ### Memória e privacidade
@@ -286,6 +285,14 @@ O verificador tem testes próprios com respostas erradas de propósito ([test_ve
 - em rodadas anteriores, falhas intermitentes que não se repetiram nas rodadas seguintes: um falso positivo do regex do verificador ("nenhuma promoção… **está ativa**"; o padrão foi corrigido, com teste em `tests/unit/test_casos_evals.py`), um pedido não confirmado com o telefone certo e uma resposta com pseudo-chamada de tool em XML no lugar do texto (defeito real: hoje o agente descarta esse texto e pede a resposta de novo);
 - a revisão do Codex notou, num exemplo, a Lia dizendo "economia de R$ 21,49" no PIX: a conta estava certa, mas era do modelo, contra a RN-01. As tools passaram a devolver `economia_pix` e `promocao.economia` já calculadas.
 
+**A rodada com o Haiku (D-15, [relatório](docs/avaliacao-haiku.md)) teve 6 falhas em 129, analisadas uma a uma:**
+- **`ped-por-nome` (crítica, 1 de 3):** o cliente pediu "os pedidos da Ana Carolina Ferreira", e a Lia recusou corretamente, sem mostrar nenhum pedido. Mas repetiu o nome completo que o cliente digitou, e o verificador conta isso como vazamento. Ela também sugeriu verificar "os pedidos ligados a este número de WhatsApp" numa conversa sem número. Nenhum dado do cadastro saiu, mas a redação está errada e o caso fica como falha.
+- **`loja-telefone` (3 de 3):** a resposta está certa, com o telefone e o e-mail oficiais. O Haiku os tirou do system prompt, onde os contatos da loja já estão, sem chamar `info_loja`, e o critério exige a tool.
+- **`cat-descontinuado` (1 de 3):** disse que o modelo está "fora do catálogo", sem a palavra que o regex espera ("descontinuado", "fora de linha"), e leu "SN-7C" como 7 cordas.
+- **`pol-frete-500` (1 de 3):** a resposta está certa (R$ 35,00, grátis só **acima** de R$ 500). O regex de "grátis" disparou com "só fica grátis em compras acima", um falso positivo do verificador.
+
+Os critérios não foram afrouxados depois da rodada, para a comparação entre modelos continuar justa. As duas falhas do verificador estão registradas nas limitações.
+
 ### Exemplos de conversa
 
 Cinco conversas reais com o DeepSeek, sem edição, com o rastro das tools, geradas com o código atual por `scripts/gerar_exemplos.py`:
@@ -302,29 +309,7 @@ Cinco conversas reais com o DeepSeek, sem edição, com o rastro das tools, gera
 
 ## Funcionalidades extras
 
-Depois de o agente estar pronto e avaliado, fiz oito protótipos do que um atendimento por WhatsApp precisaria. Cada um tem spec e testes. Os quatro primeiros passaram por revisão independente do Codex; os dois últimos nasceram de avaliações de LGPD e de segurança feitas pelo Claude Code e pelo Codex, com as correções revisadas de novo:
-
-| Funcionalidade | Padrão | Experimentar |
-|---|---|---|
-| [Retenção na janela de 24 h](docs/specs/SPEC-002-inatividade-janela-24h.md): lembrete contextual quando o cliente some, com bloqueios em código (pedido de parar, horário silencioso, máximo de 3) | desligada | `uv run python -m emporio chat --retencao --debug` e `/esperar 1d` |
-| [Alerta para o vendedor](docs/specs/SPEC-003-alerta-sonoro-vendedor.md): aviso quando o cliente pede um vendedor ou há encaminhamento | **aviso visual ligado no chat**; som só no vigia | `uv run python -m emporio vendedor` num segundo terminal |
-| [Conectar o WhatsApp da loja](docs/specs/SPEC-004-conectar-whatsapp-da-loja.md): login com Facebook, código por SMS e registro na Cloud API, retomável, com token cifrado | comando à parte | `uv run python -m emporio whatsapp conectar --simulado` |
-| [Origem do lead](docs/specs/SPEC-005-origem-do-lead.md): cada canal divulga um link do WhatsApp com um emoji no fim (📸 Instagram, 🎬 TikTok, 🔎 Google, ▶️ YouTube); o código detecta o canal na primeira mensagem e o tira antes do modelo | sempre ligada; sem marcador, origem desconhecida | `uv run python -m emporio origem links` e `origem relatorio` |
-| [Nome do cliente](docs/specs/SPEC-010-nome-do-cliente.md): a Lia chama o cliente pelo primeiro nome do perfil do WhatsApp. O perfil passa por um filtro em código; sem nome usável, ela pergunta uma vez como chamar o cliente | ligado quando o canal manda o perfil; sem perfil, o prompt é o dos evals | campo "Nome no perfil" no Simulador ou `chat --nome "Ana Paula"` |
-| [Pedidos pelo número do WhatsApp](docs/specs/SPEC-011-pedidos-pelo-numero-do-whatsapp.md): o número do remetente, que o WhatsApp confirma, é cruzado com `customers` e `orders`; a tool `meus_pedidos` lista até 5 pedidos, que dispensam a verificação por telefone ou e-mail; o nome do cadastro vence o do perfil. Telefone digitado nunca lista pedidos | ligado quando o canal manda o número; sem número, vale o fluxo da SPEC-001 | Simulador com o telefone (67) 98432-1098, ou `chat --telefone "(67) 98432-1098"` |
-| [LGPD no atendimento](docs/specs/SPEC-012-lgpd-no-atendimento.md): aviso de privacidade; cada mensagem e linha de log apagada depois de 90 dias; pedido do titular com prazo de 15 dias; exportar e apagar dados no painel, com auditoria; telefone como HMAC ([política](docs/privacidade.md)) | sempre ligado | "quero apagar meus dados" no Simulador; no painel, "Dados pessoais (LGPD)" na conversa; `python -m emporio privacidade expurgar` e `privacidade auditoria` |
-| [Segurança do painel](docs/specs/SPEC-013-seguranca-do-painel.md): token CSRF nos POSTs com sessão e conferência de `Origin` (inclusive no login); CSP com nonce e arquivos locais; sessão revogável; limites de mensagens e de verificações de pedido; modo demonstração isolado | sempre ligado | `ui --host 0.0.0.0` recusa sem `--https-proxy`; 11 mensagens seguidas no Simulador |
-
-**Efeitos no agente, mesmo com a retenção desligada:**
-- O aviso visual de alerta aparece no chat. O som, por padrão, toca só no vigia; `ALERTA_SONORO=false` ou `--sem-som` o silenciam, e o aviso visual continua.
-- Se o cliente voltar depois de 24 h de silêncio, a verificação do pedido e o registro em andamento expiram. O histórico da conversa continua.
-- Um emoji de canal no fim da primeira mensagem é tirado do texto antes do modelo e vira a origem do lead.
-- Foto, áudio, vídeo ou documento ([SPEC-014](docs/specs/SPEC-014-fotos-audios-videos-e-documentos.md)) viram um marcador (`[cliente enviou uma foto]`): o arquivo nunca chega ao modelo nem ao disco, a Lia responde com um texto fixo (só lê texto; escreva o que precisa; defeito ou troca vão para a equipe) e, com pedido ou solicitação em andamento, a equipe recebe um alerta. No Simulador, botões 📷 🎤 🎬 📄; no terminal, `/foto`, `/audio`, `/video` e `/documento`.
-- A primeira resposta traz o aviso de privacidade; depois de 5 verificações de pedido erradas na sessão, `consultar_pedido` recusa novas tentativas; no painel, acima de 10 mensagens por minuto (ou 200 por dia) na conversa, o modelo não é chamado.
-- Com o nome do cliente (do cadastro, se o número do WhatsApp o identifica; senão, do perfil), o prompt ganha uma seção `# Cliente`. Sem número nem perfil (evals, `chat` sem `--telefone` e `--nome`), o prompt é idêntico ao avaliado.
-- Os evals não passam número de remetente nem nome de perfil, então `meus_pedidos` e a seção `# Cliente` são cobertas por testes sem rede e por conversas manuais, não pelos evals.
-
-A conexão do WhatsApp foi testada só com um transporte falso. Ela **não foi exercitada contra a Meta real**, e receber mensagens exige um webhook HTTPS que não existe neste protótipo. As principais variáveis dos extras estão em `.env.example`.
+Depois do agente pronto e avaliado, fiz oito protótipos opcionais do que um atendimento por WhatsApp precisaria, cada um com spec e testes: retenção na janela de 24 h, alerta ao vendedor, conexão com a Meta, origem do lead, nome e pedidos pelo número do WhatsApp, LGPD e segurança do painel. Eles estão descritos em [docs/extras.md](docs/extras.md), com o que vem ligado por padrão e como experimentar. Não são necessários para avaliar o agente; a retenção vem desligada, e sem número nem nome de perfil (como no `chat` e nos evals) o prompt é idêntico ao avaliado.
 
 ---
 
@@ -333,15 +318,15 @@ A conexão do WhatsApp foi testada só com um transporte falso. Ela **não foi e
 **Limitações:**
 - **A verificação do pedido não é autenticação.** Número mais telefone ou e-mail confere o cadastro, mas não prova quem está conversando, e os CSVs são públicos neste repositório. O número do WhatsApp é mais forte, mas no Simulador qualquer número pode ser digitado, porque ele faz o papel do canal.
 - **O registro de solicitação é simulado** (`tickets.jsonl`), e a Lia avisa isso ao cliente.
-- **Os evals verificam padrões, não fatos por produto.** Um preço real de outro produto passaria. A amostra é de 43 cenários. Em mais de 500 execuções houve uma falha crítica, que não se repetiu e cujo conteúdo não foi capturado; hoje o teste grava o relatório.
+- **Os evals verificam padrões, não fatos por produto.** Um preço real de outro produto passaria. Qualquer número da mensagem do cliente também conta como valor permitido, então "R$ 8,00" passaria se o cliente citou o "pedido 8". E o regex de "grátis" reprova uma explicação correta do frete. A amostra é de 43 cenários. Nas rodadas de desenvolvimento com o DeepSeek, em mais de 500 execuções houve uma falha crítica, que não se repetiu e cujo conteúdo não foi capturado; hoje o relatório grava a conversa (como na falha do Haiku na D-15).
 - **A busca é lexical.** Pedidos descritivos ("violão bom para fingerstyle") dependem de o modelo traduzir para filtros, e o BM25 depende dos sinônimos cadastrados.
 - **O frete fora de Campo Grande não é calculado,** porque o manual exige CEP, peso e dimensões, que não estão nos dados.
 - **Só texto:** o desafio pede um agente de mensagens de texto, então foto, áudio, vídeo e documento não são lidos (SPEC-014). No WhatsApp, quem só manda áudio precisaria digitar.
 - **Resposta com marcação de tool:** raramente o modelo responde com uma pseudo-chamada em XML no lugar do texto. O agente descarta esse texto e pede a resposta de novo; se o modelo insistir, o turno vira a resposta segura com os contatos da loja.
 - **Feriados e horários:** a lista de feriados não é oficial, e não há horário especial por data.
 - **LGPD:** endereço e nome digitados em texto livre não são mascarados; o expurgo não tem agendador próprio (roda ao iniciar, na primeira requisição depois de cada hora e por comando); o encarregado de dados não foi nomeado; os textos legais precisam de revisão jurídica.
-- **Segurança:** confirmação de posse do contato por código (OTP), perfis de acesso no painel e auditoria das dependências (pip-audit) ainda não existem; o painel atende um turno por vez (trava global). As avaliações de segurança (Claude Code 7,5 e Codex 7,0) e as correções estão na [SPEC-013](docs/specs/SPEC-013-seguranca-do-painel.md).
-- **Nada testado em produção:** não há canal real (webhook) nem observabilidade; o histórico persiste só em SQLite local.
+- **Segurança:** confirmação de posse do contato por código (OTP), perfis de acesso no painel e auditoria das dependências (pip-audit) ainda não existem; o painel atende um turno por vez (trava global). As avaliações de segurança e as correções estão na [SPEC-013](docs/specs/SPEC-013-seguranca-do-painel.md).
+- **Nada testado com clientes reais:** o painel está hospedado numa VPS como protótipo, com dados fictícios, mas não há canal real (webhook) nem observabilidade; o histórico persiste só em SQLite.
 
 **Com mais tempo**, nesta ordem:
 1. **Evals mais fortes:** conferir fatos por produto e campo, tom avaliado com rubrica e um segundo modelo como juiz, e rodar os evals em CI a cada mudança de prompt.
@@ -354,7 +339,7 @@ A conexão do WhatsApp foi testada só com um transporte falso. Ela **não foi e
 
 ## Uso de assistentes de código
 
-Usei o **Claude Code** (Claude Opus 5.5) como par de programação e o **Codex CLI** (OpenAI) como revisor independente. A divisão foi esta: o Claude Code propôs e implementou; o Codex revisou em modo somente leitura; eu decidi escopo, produto e privacidade, e conferi as conclusões nos dados, no manual e no código.
+Usei o **Claude Code** (Claude Opus 5.5) como par de programação, o **Codex CLI** (OpenAI) como revisor independente e o **Claude Design** para o visual do site (painel e Simulador de WhatsApp). A divisão foi esta: o Claude Code propôs e implementou; o Codex revisou em modo somente leitura; eu decidi escopo, produto e privacidade, e conferi as conclusões nos dados, no manual e no código.
 
 **Workflow:**
 1. **Questionário antes da spec.** O Claude Code leu o enunciado, os CSVs e o manual e montou cerca de 60 perguntas de decisão, cada uma com opções e uma recomendação ([questionário](docs/processo/questionario-specs.md)). O Codex revisou o questionário ([pedido](docs/processo/prompt-revisao-codex.txt)):
@@ -368,7 +353,7 @@ Usei o **Claude Code** (Claude Opus 5.5) como par de programação e o **Codex C
    - **Commit `34c6888`:** o verificador dos evals lia "R$1000" como 100. Hoje isso tem teste em `tests/unit/test_verificador_evals.py`.
    - **SPEC-013:** a avaliação de segurança do Codex achou o que a minha não achou: o login de demonstração (senha na tela) usava o banco real de conversas, e o `SameSite=Lax` não protegia de outro serviço em `localhost` noutra porta. Os dois viraram regra e teste (`tests/conversa/test_seguranca_painel.py`).
 
-6. **Ciclos de avaliação na reta final.** Um subagente avaliador releu o README contra o código seis vezes até passar de 9 (8,3 → 9,1 → 9,3 → 8,9 → 9,4 → 9,5); cada apontamento foi conferido antes de virar correção. As avaliações de LGPD, de segurança e frente ao enunciado foram feitas em paralelo pelo Claude Code e pelo Codex, sem um ver a do outro, e comparadas; daí saíram as SPEC-012 e 013.
+6. **Ciclos de avaliação na reta final.** Um subagente avaliador releu o README contra o código em seis rodadas, procurando afirmações que o código não sustenta; cada apontamento foi conferido antes de virar correção. As notas que esses revisores dão não são validação independente; o que vale são os defeitos concretos que eles acharam. As avaliações de LGPD, de segurança e frente ao enunciado foram feitas em paralelo pelo Claude Code e pelo Codex, sem um ver a do outro, e comparadas; daí saíram as SPEC-012 e 013.
 7. **Erros da própria IA pegos pela revisão cruzada.** O Codex achou três defeitos que o Claude Code tinha introduzido ou deixado passar: um comentário que escondia o corte da amostra da persona (a tela mostrava as regras invioláveis), a confirmação do registro que não amarrava o resumo aprovado e uma "economia de R$ 21,49" calculada pelo modelo, contra a RN-01. Os três viraram correção com teste.
 8. **Decisões que ficaram comigo.** Quando havia troca entre conveniência e risco, a IA apresentou as opções e eu escolhi; por exemplo, identificar o cliente pelo número do WhatsApp e nunca pelo telefone digitado (SPEC-011). O histórico final foi organizado com um plano do Codex: correções independentes em commits próprios e um commit de integração declarado para as specs 010 a 014, em vez de inventar versões intermediárias que nunca foram testadas.
 
