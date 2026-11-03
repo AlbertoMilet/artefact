@@ -1,6 +1,6 @@
 # Funcionalidades extras (opcionais)
 
-Estes protótipos **não fazem parte da solução pedida pelo desafio**, que está no [README](../README.md). Fiz depois de o agente estar pronto e avaliado, para explorar o que um atendimento por WhatsApp precisaria. O prompt avaliado nos evals é o mesmo com ou sem eles.
+Estes protótipos **não fazem parte da solução pedida pelo desafio**, que está no [README](../README.pt-br.md) ([English](../README.md)). Fiz depois de o agente estar pronto e avaliado, para explorar o que um atendimento por WhatsApp precisaria. O prompt avaliado nos evals é o mesmo com ou sem eles.
 
 Depois de o agente estar pronto e avaliado, fiz oito protótipos do que um atendimento por WhatsApp precisaria. Cada um tem spec e testes. Os quatro primeiros passaram por revisão independente do Codex; os dois últimos nasceram de avaliações de LGPD e de segurança feitas pelo Claude Code e pelo Codex, com as correções revisadas de novo:
 
